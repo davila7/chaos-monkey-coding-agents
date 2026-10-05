@@ -174,7 +174,7 @@ M1 scope as specified:
 1. Close V-11 and V-12. Install a pinned Harbor and run its `oracle` and `nop` agents on one of Harbor's own example tasks. Check custom agents that subclass installed agents, `populate_context_post_run`, the `/logs/agent` sync, and `--ak`/`--ae`. No model calls.
 2. Close V-01, V-10 and V-06. Pin Claude Code, Pi and OpenCode v2. Write the injectors `injector-claude-code`, `injector-pi` and `injector-opencode` over `fault-engine`, plus the Harbor custom agents `ChaosClaudeCode`, `ChaosPi` and `ChaosOpenCode` in `python/cmca_harbor`.
 3. Conformance probes (SPEC 9.6) for those three harnesses, each run 3 times, producing `capabilities/<harness>@<version>.json` and the parity set. These are model calls. They are allowed by rule 5, but a cost estimate is posted first.
-4. Close V-08: the same model ID is reachable from Pi and OpenCode.
+4. Close V-08: check that the same model ID is reachable from Pi, OpenCode and fx (through Vercel AI Gateway), and whether any gateway in the path retries failed model calls.
 
 End-to-end slice (beyond SPEC M1; it pulls a small part of M2 and M4 forward):
 
@@ -186,6 +186,7 @@ End-to-end slice (beyond SPEC M1; it pulls a small part of M2 and M4 forward):
 Needed from the owner:
 
 - `ANTHROPIC_API_KEY` for items 3 and 7, stored as an environment secret (never in the repository). `OPENAI_API_KEY` and Google credentials are not needed until M3.
+- A Vercel AI Gateway key for the fx part of V-08 (item 4).
 - Vercel: either the Vercel MCP connector in this project, or a `VERCEL_TOKEN` plus the team and project names. Needed only for item 8.
 - Decisions on D-0004, D-0005 and D-0012.
 
