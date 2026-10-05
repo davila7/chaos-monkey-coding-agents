@@ -1,4 +1,4 @@
-import type { FaultDecision } from '../types.js';
+import { FAULT_PHASE, type FaultDecision, type FaultType } from '../types.js';
 
 export interface DecideRequest {
   toolName: string;
@@ -6,6 +6,41 @@ export interface DecideRequest {
   args: unknown;
   paths?: string[];
   agentId?: string;
+}
+
+/**
+ * What a post-phase output transform needs from the decision. Returned by
+ * the decide step and handed back unchanged to `tt-decide --apply`, so the
+ * transform runs in the same engine code without touching trial state.
+ */
+export interface PostRef {
+  type: FaultType;
+  payload_id: string;
+  poison_index?: number;
+  drift_index?: number;
+}
+
+export function postRef(d: FaultDecision): PostRef | null {
+  if (!d.inject || !d.type || !d.payloadId || FAULT_PHASE[d.type] !== 'post') return null;
+  return {
+    type: d.type,
+    payload_id: d.payloadId,
+    ...(d.poisonIndex !== undefined ? { poison_index: d.poisonIndex } : {}),
+    ...(d.driftIndex !== undefined ? { drift_index: d.driftIndex } : {}),
+  };
+}
+
+export function fromPostRef(ref: PostRef): FaultDecision {
+  return {
+    inject: true,
+    type: ref.type,
+    payloadId: ref.payload_id,
+    key: '',
+    occurrence: 0,
+    seq: -1,
+    ...(ref.poison_index !== undefined ? { poisonIndex: ref.poison_index } : {}),
+    ...(ref.drift_index !== undefined ? { driftIndex: ref.drift_index } : {}),
+  };
 }
 
 export interface DecideResult {
@@ -36,12 +71,15 @@ const generic: StdioAdapter = {
   respond(r) {
     if (!r || !r.decision.inject) return JSON.stringify({ apply: false });
     const d = r.decision;
+    const post = postRef(d);
     return JSON.stringify({
       apply: true,
       type: d.type,
+      phase: d.type ? FAULT_PHASE[d.type] : 'pre',
       payload_id: d.payloadId,
       text: r.text,
       ...(d.delayMs !== undefined ? { delay_ms: d.delayMs } : {}),
+      ...(post ? { post } : {}),
     });
   },
 };

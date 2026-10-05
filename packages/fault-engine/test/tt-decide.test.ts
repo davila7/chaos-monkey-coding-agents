@@ -72,3 +72,36 @@ describe('tt-decide', () => {
     expect(JSON.parse(child.stdout)).toEqual({ apply: false });
   });
 });
+
+describe('tt-decide --apply', () => {
+  const apply = (env: NodeJS.ProcessEnv, payload: unknown) =>
+    JSON.parse(spawnSync(process.execPath, [BIN, '--apply'], { env, input: JSON.stringify(payload), encoding: 'utf8' }).stdout) as {
+      output: string;
+    };
+
+  it('returns a post reference that --apply turns into the transformed output', async () => {
+    const p = profileWith(profile('moderate'), {
+      base_rate: 1,
+      max_faults_per_trial: 10,
+      weights: { trunc: 1 },
+      persistence: { transient: 1 },
+    });
+    const { env, log } = setup({ profile: p });
+    const out = JSON.parse(await call(env, { tool_name: 'Bash', capability: 'shell', args: { command: 'ls' } })) as {
+      apply: boolean;
+      phase: string;
+      post: unknown;
+    };
+    expect(out).toMatchObject({ apply: true, phase: 'post', post: { type: 'trunc' } });
+    const before = readFileSync(log, 'utf8');
+    expect(apply(env, { post: out.post, output: '0123456789' }).output).toBe('012');
+    expect(readFileSync(log, 'utf8')).toBe(before);
+  });
+
+  it('passes the output through on a missing reference or bad input', () => {
+    const { env } = setup();
+    expect(apply(env, { output: 'abc' }).output).toBe('abc');
+    const r = spawnSync(process.execPath, [BIN, '--apply'], { env, input: 'nope', encoding: 'utf8' });
+    expect(JSON.parse(r.stdout)).toEqual({ output: '' });
+  });
+});

@@ -4,9 +4,9 @@ import { canonicalArgs } from '../canonical.js';
 import { createEngine, type FaultEngine } from '../engine.js';
 import { JsonlSink } from '../logger.js';
 import type { CatalogEntry, EngineConfig } from '../schemas.js';
-import { FileStateStore } from '../state.js';
+import { FileStateStore, MemoryStateStore } from '../state.js';
 import type { CapabilityClass, FaultDecision } from '../types.js';
-import { adapters, type DecideRequest } from './adapters.js';
+import { adapters, fromPostRef, type DecideRequest, type PostRef } from './adapters.js';
 
 const env = process.env;
 const CONFIG_PATH = env.TT_CONFIG ?? '/opt/tt/config.json';
@@ -26,7 +26,35 @@ function readStdin(): string {
   }
 }
 
+/**
+ * `--apply`: stdin `{ post, output }`, stdout `{ output }`. Applies a
+ * post-phase transform chosen by an earlier decide call. Never reads or
+ * writes trial state and never logs; on any failure the output is returned
+ * unchanged.
+ */
+function applyMain(raw: string): void {
+  let output = '';
+  try {
+    const p = JSON.parse(raw) as { post?: PostRef; output?: unknown };
+    output = typeof p.output === 'string' ? p.output : '';
+    if (p.post) {
+      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as EngineConfig;
+      const engine = createEngine({
+        config,
+        catalog: catalog as CatalogEntry[],
+        store: new MemoryStateStore(),
+        sink: { write() {} },
+      });
+      output = engine.applyOutput(fromPostRef(p.post), output);
+    }
+  } catch {
+    // pass the original output through
+  }
+  process.stdout.write(JSON.stringify({ output }));
+}
+
 function main(): void {
+  if (process.argv.includes('--apply')) return applyMain(readStdin());
   const adapter = adapters[formatArg(process.argv.slice(2))] ?? adapters.generic!;
   const raw = readStdin();
   let engine: FaultEngine | null = null;

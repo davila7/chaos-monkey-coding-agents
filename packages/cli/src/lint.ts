@@ -45,10 +45,10 @@ export function readCanary(root: string): string {
 }
 
 /** String literals, template chunks, and environment variable names in a JS bundle. */
-export function bundleStrings(source: string): { strings: string[]; envNames: string[] } {
+export function bundleStrings(source: string, sourceType: 'script' | 'module' = 'script'): { strings: string[]; envNames: string[] } {
   const strings: string[] = [];
   const envNames = new Set<string>();
-  const ast = parse(source, { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true });
+  const ast = parse(source, { ecmaVersion: 'latest', sourceType, allowHashBang: true });
   simple(ast, {
     Literal(n) {
       if (typeof n.value === 'string') strings.push(n.value);
@@ -104,7 +104,7 @@ export function lint(root: string, opts: LintOptions = {}): LintIssue[] {
 
   for (const f of opts.artifacts ?? defaultArtifacts(root)) {
     banned(rel(f), 'file name', basename(f));
-    const { strings, envNames } = bundleStrings(readFileSync(f, 'utf8'));
+    const { strings, envNames } = bundleStrings(readFileSync(f, 'utf8'), f.endsWith('.cjs') ? 'script' : 'module');
     for (const s of strings) banned(rel(f), 'string', s, TELEMETRY_ALLOWLIST);
     for (const e of envNames) banned(rel(f), 'environment variable', e);
   }
