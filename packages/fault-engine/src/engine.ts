@@ -40,7 +40,7 @@ export function createEngine(deps: EngineDeps): FaultEngine {
     latencyMs: number,
     error?: string,
   ): InjectionRecord => ({
-    schema: 'tt-event/1',
+    schema: 'tt-event/2',
     seq: d ? d.seq : null,
     ts: now().toISOString(),
     trial_id: config.trial_id,
@@ -53,12 +53,12 @@ export function createEngine(deps: EngineDeps): FaultEngine {
     args_hash: shortHash(sig.canonicalArgs),
     key: d ? d.key : safeKey(sig),
     occurrence: d ? d.occurrence : 0,
-    decision: error !== undefined ? 'error' : d?.inject ? 'inject' : 'pass',
+    decision: error !== undefined ? 'error' : d?.inject ? 'apply' : 'pass',
     type: d?.type ?? null,
     payload_id: d?.payloadId ?? null,
     exempt_reason: d?.exemptReason ?? null,
     agent_id: sig.agentId ?? null,
-    injector_latency_ms: Math.round(latencyMs * 1000) / 1000,
+    latency_ms: Math.round(latencyMs * 1000) / 1000,
     persistence: d?.persistence ?? null,
     ...(error !== undefined ? { error } : {}),
   });

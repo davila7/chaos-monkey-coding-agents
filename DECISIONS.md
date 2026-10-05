@@ -59,6 +59,8 @@ Current state: the lint has an exact-match allowlist for those two strings only 
 
 Recommendation: define `tt-event/2` with `"decision": "apply" | "pass" | "error"` and `latency_ms`, then remove the allowlist. Cost is small now and grows once analysis fixtures exist (M4).
 
+Implemented 2026-10-05: records are `tt-event/2` with `decision: "apply" | "pass" | "error"` and `latency_ms`; the allowlist is removed. `schemas/tt-event-1.schema.json` stays in the repository as the superseded definition (CLAUDE.md rule 2) and is no longer generated or used. SPEC 9.5 still shows the `tt-event/1` field names and needs the same amendment.
+
 ## D-0005 Profile values the SPEC leaves open
 
 - Date: 2026-10-05

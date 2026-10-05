@@ -52,7 +52,7 @@ describe('tt-decide', () => {
     const records = readLog(log);
     expect(records).toHaveLength(32);
     expect(records.map((r) => r.seq).sort((a, b) => a! - b!)).toEqual([...Array(32).keys()]);
-    expect(records.filter((r) => r.decision === 'inject')).toHaveLength(cap);
+    expect(records.filter((r) => r.decision === 'apply')).toHaveLength(cap);
   });
 
   it('keeps per-key occurrence state across processes', async () => {

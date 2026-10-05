@@ -97,7 +97,7 @@ describe('handle with the real engine', () => {
     const out = await handle(bash('ls'), spy.next, run);
     expect(spy.calls).toHaveLength(0);
     expect('deny' in out && (out.deny ?? '').length).toBeGreaterThan(0);
-    expect(JSON.parse(readFileSync(log, 'utf8').trim())).toMatchObject({ decision: 'inject', type: 'err', capability: 'shell' });
+    expect(JSON.parse(readFileSync(log, 'utf8').trim())).toMatchObject({ decision: 'apply', type: 'err', capability: 'shell' });
   });
 
   it('truncates the output of a call that ran', async () => {

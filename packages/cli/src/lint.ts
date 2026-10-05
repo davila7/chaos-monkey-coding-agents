@@ -10,13 +10,6 @@ export interface LintIssue {
   detail: string;
 }
 
-/**
- * Strings mandated by the SPEC 9.5 telemetry schema (record field names and
- * values). They never reach the agent through a tool result; see DECISIONS.md
- * D-0004 for the open question on renaming them.
- */
-export const TELEMETRY_ALLOWLIST = new Set(['inject', 'injector_latency_ms']);
-
 /** Files under each task directory that are copied into the agent container. */
 const AGENT_VISIBLE = (rel: string) => rel === 'instruction.md' || rel.startsWith('environment/');
 /** Files the agent never sees; each must carry the canary. */
@@ -87,8 +80,7 @@ export function defaultArtifacts(root: string): string[] {
 export function lint(root: string, opts: LintOptions = {}): LintIssue[] {
   const issues: LintIssue[] = [];
   const rel = (p: string) => relative(root, p);
-  const banned = (file: string, where: string, text: string, allow?: Set<string>) => {
-    if (allow?.has(text)) return;
+  const banned = (file: string, where: string, text: string) => {
     for (const hit of bannedHits(text)) issues.push({ rule: 'banned-word', file, detail: `${where}: "${hit}"` });
   };
 
@@ -105,7 +97,7 @@ export function lint(root: string, opts: LintOptions = {}): LintIssue[] {
   for (const f of opts.artifacts ?? defaultArtifacts(root)) {
     banned(rel(f), 'file name', basename(f));
     const { strings, envNames } = bundleStrings(readFileSync(f, 'utf8'), f.endsWith('.cjs') ? 'script' : 'module');
-    for (const s of strings) banned(rel(f), 'string', s, TELEMETRY_ALLOWLIST);
+    for (const s of strings) banned(rel(f), 'string', s);
     for (const e of envNames) banned(rel(f), 'environment variable', e);
   }
 

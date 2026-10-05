@@ -141,7 +141,7 @@ export type EngineConfigInput = z.input<typeof EngineConfigSchema>;
 
 export const InjectionRecordSchema = z
   .object({
-    schema: z.literal('tt-event/1'),
+    schema: z.literal('tt-event/2'),
     seq: z.number().int().min(0).nullable(),
     ts: z.string(),
     trial_id: z.string().nullable(),
@@ -154,12 +154,12 @@ export const InjectionRecordSchema = z
     args_hash: z.string(),
     key: z.string(),
     occurrence: z.number().int().min(0),
-    decision: z.enum(['inject', 'pass', 'error']),
+    decision: z.enum(['apply', 'pass', 'error']),
     type: FaultTypeSchema.nullable(),
     payload_id: z.string().nullable(),
     exempt_reason: z.string().nullable(),
     agent_id: z.string().nullable(),
-    injector_latency_ms: z.number().min(0),
+    latency_ms: z.number().min(0),
     persistence: z.enum(['transient', 'sticky', 'outage']).nullable().optional(),
     error: z.string().nullable().optional(),
   })
@@ -244,7 +244,7 @@ export const ALL_SCHEMAS = {
   'tt-catalog-1': CatalogSchema,
   'tt-task-1': TaskChaosSchema,
   'tt-engine-1': EngineConfigSchema,
-  'tt-event-1': InjectionRecordSchema,
+  'tt-event-2': InjectionRecordSchema,
   'tt-config-1': HarnessConfigSchema,
   'tt-capabilities-1': CapabilityFileSchema,
   'cmca-submission-1': SubmissionMetadataSchema,
