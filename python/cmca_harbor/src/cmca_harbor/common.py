@@ -1,4 +1,6 @@
 import json
+import shlex
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -47,3 +49,59 @@ def read_events(logs_dir: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+class TtAgentMixin:
+    """Injector setup shared by the CMCA Harbor agents.
+
+    A subclass names the folder of its harness under the build layout
+    (`HARNESS_DIR`). Without `tt_config_dir` nothing is uploaded and the
+    harness runs unmodified, which is the `clean` baseline with an identical
+    installation.
+    """
+
+    HARNESS_DIR: str
+
+    def _tt_active(self) -> bool:
+        return bool(self.options.tt_config_dir)
+
+    async def _tt_prepare(self, environment) -> dict[str, str]:
+        """Uploads the injector and config; returns the env for the harness process."""
+        opts = self.options
+        if not opts.tt_config_dir:
+            return {}
+        if opts.attempt_index is None:
+            raise ValueError("attempt_index is required when tt_config_dir is set")
+        if not opts.tt_build_dir:
+            raise ValueError("tt_build_dir is required when tt_config_dir is set")
+        build = Path(opts.tt_build_dir)
+        for required in ("bin/tt-decide.cjs", self.HARNESS_DIR):
+            if not (build / required).exists():
+                raise FileNotFoundError(f"{build / required} missing; run `pnpm build`")
+        task = trial_task_name(self.logs_dir)
+        cfg = engine_config(Path(opts.tt_config_dir), task, opts.attempt_index, self.logs_dir.parent.name)
+
+        await self.exec_as_root(environment, command=f"mkdir -p {REMOTE_ROOT} {REMOTE_LOG_DIR}")
+        await environment.upload_dir(build / "bin", f"{REMOTE_ROOT}/bin")
+        await environment.upload_dir(build / self.HARNESS_DIR, f"{REMOTE_ROOT}/{self.HARNESS_DIR}")
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "config.json"
+            local.write_text(json.dumps(cfg))
+            await environment.upload_file(local, REMOTE_CONFIG)
+        owner = environment.default_user
+        chown = f"chown -R {shlex.quote(str(owner))} {REMOTE_ROOT} {REMOTE_LOG_DIR} && " if owner is not None else ""
+        await self.exec_as_root(
+            environment,
+            command=f"{chown}mkdir -p {REMOTE_STATE} && chmod -R a+rX {REMOTE_ROOT}",
+        )
+        return {"TT_CONFIG": REMOTE_CONFIG, "TT_STATE": REMOTE_STATE, "TT_LOG": REMOTE_LOG}
+
+    def _tt_metadata(self, context) -> None:
+        events = read_events(self.logs_dir)
+        metadata = dict(context.metadata or {})
+        metadata["tt"] = {
+            "events": len(events),
+            "applied": sum(1 for e in events if e.get("decision") == "apply"),
+            "errors": sum(1 for e in events if e.get("decision") == "error"),
+        }
+        context.metadata = metadata

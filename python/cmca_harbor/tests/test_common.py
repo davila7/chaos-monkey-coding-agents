@@ -3,8 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from cmca_harbor import ChaosClaudeCode
+from cmca_harbor import ChaosClaudeCode, ChaosPi
 from cmca_harbor.claude_code import ChaosClaudeCodeOptions
+from cmca_harbor.pi import ChaosPiOptions
 from cmca_harbor.common import engine_config, read_events, trial_task_name
 
 
@@ -13,6 +14,9 @@ def test_options_accept_tt_kwargs():
     assert (opts.attempt_index, opts.tt_config_dir, opts.tt_build_dir, opts.max_turns) == (2, "/c", "/b", 5)
     assert ChaosClaudeCode.options_model is ChaosClaudeCodeOptions
     assert ChaosClaudeCode.name() == "chaos-claude-code"
+    pi = ChaosPiOptions(attempt_index=0, tt_config_dir="/c", thinking="low")
+    assert (pi.attempt_index, pi.thinking) == (0, "low")
+    assert ChaosPi.options_model is ChaosPiOptions
 
 
 def test_trial_task_name_prefers_trial_config(tmp_path: Path):
@@ -37,3 +41,10 @@ def test_read_events(tmp_path: Path):
     (tmp_path / "tt").mkdir()
     (tmp_path / "tt" / "events.jsonl").write_text('{"decision": "apply"}\n\n{"decision": "pass"}\n')
     assert [e["decision"] for e in read_events(tmp_path)] == ["apply", "pass"]
+
+
+def test_pi_adds_the_extension_flag_only_when_active(tmp_path: Path):
+    on = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m", attempt_index=0, tt_config_dir="/c", tt_build_dir="/b")
+    assert on.build_cli_flags().endswith("--extension /opt/tt/pi/index.js")
+    off = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m")
+    assert "--extension" not in off.build_cli_flags()
