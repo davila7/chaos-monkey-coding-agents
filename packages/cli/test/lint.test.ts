@@ -67,12 +67,15 @@ describe('banned words', () => {
     );
   });
 
-  it('allows the SPEC 9.5 telemetry field names only as exact strings', () => {
-    expect(bundleStrings('x = { injector_latency_ms: 1, decision: "inject" }').strings).toEqual(['inject']);
-    const ok = fixture({ 'packages/injector-x/dist/a.js': 'r.decision = "inject"; r["injector_latency_ms"] = 1;' });
-    expect(lint(ok)).toEqual([]);
-    const bad = fixture({ 'packages/injector-x/dist/a.js': 'msg = "inject now"' });
+  it('has no telemetry allowlist (D-0004)', () => {
+    expect(bundleStrings('x = { latency_ms: 1, decision: "apply" }').strings).toEqual(['apply']);
+    const bad = fixture({ 'packages/injector-x/dist/a.js': 'r.decision = "inject"' });
     expect(lint(bad)).toHaveLength(1);
+  });
+
+  it('parses .js artifacts as ES modules', () => {
+    const root = fixture({ 'packages/injector-x/dist/a.js': 'import { x } from "./b.js";\nexport const y = "chaos";' });
+    expect(lint(root)).toEqual([expect.objectContaining({ rule: 'banned-word', detail: 'string: "chaos"' })]);
   });
 
   it('blocks banned words in agent-visible task files', () => {

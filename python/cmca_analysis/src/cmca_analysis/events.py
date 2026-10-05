@@ -1,4 +1,4 @@
-"""Ingest and validate injection records (SPEC 9.5, schema tt-event/1)."""
+"""Ingest and validate injection records (SPEC 9.5, schema tt-event/2)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-EVENT_SCHEMA_PATH = REPO_ROOT / "packages/fault-engine/schemas/tt-event-1.schema.json"
+EVENT_SCHEMA_PATH = REPO_ROOT / "packages/fault-engine/schemas/tt-event-2.schema.json"
 
 
 @cache

@@ -9,7 +9,7 @@ from cmca_analysis.events import read_event_log, sequence_problems
 
 def record(seq, decision="pass", **over):
     r = {
-        "schema": "tt-event/1",
+        "schema": "tt-event/2",
         "seq": seq,
         "ts": "2026-10-05T00:00:00.000Z",
         "trial_id": None,
@@ -27,7 +27,7 @@ def record(seq, decision="pass", **over):
         "payload_id": None,
         "exempt_reason": None,
         "agent_id": None,
-        "injector_latency_ms": 1.5,
+        "latency_ms": 1.5,
         "persistence": None,
     }
     r.update(over)

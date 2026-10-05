@@ -1,0 +1,107 @@
+import json
+import shlex
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+REMOTE_ROOT = "/opt/tt"
+REMOTE_CONFIG = f"{REMOTE_ROOT}/config.json"
+REMOTE_STATE = f"{REMOTE_ROOT}/state"
+REMOTE_LOG_DIR = "/logs/agent/tt"
+REMOTE_LOG = f"{REMOTE_LOG_DIR}/events.jsonl"
+
+
+class TtOptions(BaseModel):
+    """Options every CMCA agent declares so Harbor accepts them through `--ak`."""
+
+    attempt_index: int | None = Field(default=None)
+    # Host directory holding one resolved engine config per task, `<task>.json`,
+    # written by `cmca plan`. Absent means the harness runs without the injector.
+    tt_config_dir: str | None = Field(default=None)
+    # Host directory with the built injector layout (`bin/`, plugin folders).
+    tt_build_dir: str | None = Field(default=None)
+
+
+def trial_task_name(logs_dir: Path) -> str:
+    """Task directory name of the trial that owns `logs_dir` (`<trial>/agent`)."""
+    trial_dir = logs_dir.parent
+    config = trial_dir / "config.json"
+    if config.exists():
+        path = json.loads(config.read_text()).get("task", {}).get("path")
+        if path:
+            return Path(path).name
+    return trial_dir.name.rsplit("__", 1)[0]
+
+
+def engine_config(config_dir: Path, task: str, attempt: int, trial_id: str) -> dict[str, Any]:
+    cfg = json.loads((config_dir / f"{task}.json").read_text())
+    if cfg.get("schema") != "tt-engine/1":
+        raise ValueError(f"{config_dir / f'{task}.json'}: not a tt-engine/1 config")
+    if cfg.get("task_id") != task:
+        raise ValueError(f"engine config task_id {cfg.get('task_id')!r} does not match task {task!r}")
+    return {**cfg, "attempt": attempt, "trial_id": trial_id}
+
+
+def read_events(logs_dir: Path) -> list[dict[str, Any]]:
+    path = logs_dir / "tt" / "events.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+class TtAgentMixin:
+    """Injector setup shared by the CMCA Harbor agents.
+
+    A subclass names the folder of its harness under the build layout
+    (`HARNESS_DIR`). Without `tt_config_dir` nothing is uploaded and the
+    harness runs unmodified, which is the `clean` baseline with an identical
+    installation.
+    """
+
+    HARNESS_DIR: str
+
+    def _tt_active(self) -> bool:
+        return bool(self.options.tt_config_dir)
+
+    async def _tt_prepare(self, environment) -> dict[str, str]:
+        """Uploads the injector and config; returns the env for the harness process."""
+        opts = self.options
+        if not opts.tt_config_dir:
+            return {}
+        if opts.attempt_index is None:
+            raise ValueError("attempt_index is required when tt_config_dir is set")
+        if not opts.tt_build_dir:
+            raise ValueError("tt_build_dir is required when tt_config_dir is set")
+        build = Path(opts.tt_build_dir)
+        for required in ("bin/tt-decide.cjs", self.HARNESS_DIR):
+            if not (build / required).exists():
+                raise FileNotFoundError(f"{build / required} missing; run `pnpm build`")
+        task = trial_task_name(self.logs_dir)
+        cfg = engine_config(Path(opts.tt_config_dir), task, opts.attempt_index, self.logs_dir.parent.name)
+
+        await self.exec_as_root(environment, command=f"mkdir -p {REMOTE_ROOT} {REMOTE_LOG_DIR}")
+        await environment.upload_dir(build / "bin", f"{REMOTE_ROOT}/bin")
+        await environment.upload_dir(build / self.HARNESS_DIR, f"{REMOTE_ROOT}/{self.HARNESS_DIR}")
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "config.json"
+            local.write_text(json.dumps(cfg))
+            await environment.upload_file(local, REMOTE_CONFIG)
+        owner = environment.default_user
+        chown = f"chown -R {shlex.quote(str(owner))} {REMOTE_ROOT} {REMOTE_LOG_DIR} && " if owner is not None else ""
+        await self.exec_as_root(
+            environment,
+            command=f"{chown}mkdir -p {REMOTE_STATE} && chmod -R a+rX {REMOTE_ROOT}",
+        )
+        return {"TT_CONFIG": REMOTE_CONFIG, "TT_STATE": REMOTE_STATE, "TT_LOG": REMOTE_LOG}
+
+    def _tt_metadata(self, context) -> None:
+        events = read_events(self.logs_dir)
+        metadata = dict(context.metadata or {})
+        metadata["tt"] = {
+            "events": len(events),
+            "applied": sum(1 for e in events if e.get("decision") == "apply"),
+            "errors": sum(1 for e in events if e.get("decision") == "error"),
+        }
+        context.metadata = metadata
