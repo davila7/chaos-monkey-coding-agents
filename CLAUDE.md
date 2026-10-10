@@ -21,3 +21,7 @@ SPEC.md is the source of truth. Propose changes through DECISIONS.md entries. Ne
 ## Definition of done
 
 A milestone is done when every acceptance criterion in SPEC section 19 is met, the related verification items are closed, and the owner has reviewed the milestone summary in DECISIONS.md.
+
+## Project links
+
+- Results site (production): https://chaos-monkey-coding-agents.vercel.app. Source in `packages/site`; Vercel deploys `main` with Root Directory `packages/site`.
