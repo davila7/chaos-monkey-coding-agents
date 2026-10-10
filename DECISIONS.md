@@ -226,7 +226,7 @@ Decision:
 3. A `kind` field separates `release`, `smoke` and `sample`. `smoke` shows the D-0013 label "smoke run, not a benchmark result" and hides bands. `sample` is a separate file, `data/sample.json`, used only when `SITE_DATA=sample` is set at build time; it shows a warning banner, uses invented harness and model names (`Sample harness A`, `sample-model-1`), and the loader refuses a `results.json` whose kind is `sample`. This keeps SPEC 0 ("no placeholder or estimated results in docs") intact for production builds while the layout can be previewed.
 4. Rank bands (SPEC 12) replace ordinal ranks. Rows are sorted by Faulted Success; a new band starts when a row's interval does not overlap the interval of the first row in the current band. Overlap is not transitive, so this greedy rule is a choice; it is unit-tested.
 5. Views: table (sortable, default sort Faulted Success), Pareto (Faulted Success against dollars per success), and degradation curves (pass^1 against base rate). `/data.json` serves the same file for download.
-6. Vercel: Root Directory `packages/site`; `vercel.json` installs only `@cmca/site` from the workspace lockfile and serves `out/`.
+6. Vercel: Root Directory `packages/site`; `vercel.json` installs only `@cmca/site` from the workspace lockfile. The Next.js preset reads `.next` and serves the static export from it, so `vercel.json` sets no output directory (setting `out` fails with a missing `routes-manifest.json`).
 
 Not in this change: the Config detail, Methodology, Tasks, Capabilities, Submit and Changelog pages from SPEC 9.8, Harbor Hub reads (V-15), and the per-fault heatmap. They wait for data that exists.
 
