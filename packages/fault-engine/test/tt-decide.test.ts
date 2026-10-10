@@ -73,6 +73,26 @@ describe('tt-decide', () => {
   });
 });
 
+describe('tt-decide setup failures', () => {
+  it('logs an error record for an unresolved config instead of passing silently', async () => {
+    const { dir, env, log } = setup();
+    const raw = { ...config(), task: { schema: 'tt-task/1' } } as Record<string, unknown>;
+    delete raw.workspace_root;
+    writeFileSync(join(dir, 'config.json'), JSON.stringify(raw));
+    const out = JSON.parse(await call(env, { tool_name: 'Read', capability: 'fs.read', args: { file_path: '/app/x' } }));
+    expect(out).toEqual({ apply: false });
+    const [rec] = readLog(log);
+    expect(rec).toMatchObject({ decision: 'error', tool_name: 'Read', capability: 'fs.read', seq: null });
+    expect(rec!.error).toMatch(/not resolved; missing workspace_root, task.exposure/);
+  });
+
+  it('logs an error record when the config file is missing', async () => {
+    const { env, log } = setup();
+    await call({ ...env, TT_CONFIG: '/nonexistent' }, { tool_name: 'Bash', capability: 'shell', args: { command: 'ls' } });
+    expect(readLog(log)[0]).toMatchObject({ decision: 'error', task_id: '' });
+  });
+});
+
 describe('tt-decide --apply', () => {
   const apply = (env: NodeJS.ProcessEnv, payload: unknown) =>
     JSON.parse(spawnSync(process.execPath, [BIN, '--apply'], { env, input: JSON.stringify(payload), encoding: 'utf8' }).stdout) as {
