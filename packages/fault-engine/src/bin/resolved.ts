@@ -3,7 +3,7 @@
 // test/resolved.test.ts keeps them equal to the difference between the
 // `required` lists of the resolved and the input JSON Schemas.
 export const DEFAULTED_KEYS = {
-  root: ['trial_id', 'workspace_root', 'exempt_paths', 'variants'],
+  root: ['trial_id', 'parity_gaps', 'workspace_root', 'exempt_paths', 'variants'],
   profile: ['warmup_calls', 'persistence', 'weights', 'class_rate_multipliers'],
   task: ['exposure', 'poison', 'non_idempotent', 'drift', 'alternatives', 'exempt'],
 } as const;

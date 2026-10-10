@@ -75,6 +75,19 @@ describe('exemptions', () => {
 describe('type eligibility', () => {
   const types = (cfg: ReturnType<typeof config>, s: CallSignature) => candidateTypes(cfg, catalog, s).map((c) => c.type);
 
+  it('skips parity gaps for the listed capability only', () => {
+    const cfg = config({
+      profile: always('moderate', { weights: { empty: 1 } }),
+      parity_gaps: [
+        { type: 'empty', capability: 'fs.write' },
+        { type: 'empty', capability: 'mcp.*' },
+      ],
+    });
+    expect(types(cfg, sig({ capability: 'fs.write' }))).not.toContain('empty');
+    expect(types(cfg, sig({ capability: 'mcp.docs.get_doc' }))).not.toContain('empty');
+    expect(types(cfg, sig({ capability: 'fs.read' }))).toContain('empty');
+  });
+
   it('never corrupts shell or write arguments', () => {
     const p = always('moderate', { weights: { inarg: 1 } });
     const cfg = config({ profile: p });

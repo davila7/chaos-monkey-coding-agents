@@ -82,7 +82,13 @@ export function textView(tool: string, result: unknown): { text: string; with(te
   if (tool === 'Read' && r.type === 'text') {
     const file = r.file as Record<string, unknown>;
     if (typeof file?.content !== 'string') return null;
-    return { text: file.content, with: (t) => ({ ...r, file: { ...file, content: t, numLines: lines(t) } }) };
+    // The mapper reports totalLines when content is empty or short, so it
+    // must describe the replaced text, or the real file size leaks.
+    const start = typeof file.startLine === 'number' && file.startLine > 1 ? file.startLine : 1;
+    return {
+      text: file.content,
+      with: (t) => ({ ...r, file: { ...file, content: t, numLines: lines(t), totalLines: start - 1 + lines(t) } }),
+    };
   }
   if (tool === 'Grep' && typeof r.content === 'string') {
     return { text: r.content, with: (t) => ({ ...r, content: t, numLines: lines(t) }) };
