@@ -271,7 +271,8 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
                 c = task_class[_task_of(trial)]
                 r = check_trial(trial, harness, t, c)
                 per_cell.setdefault((t, c), []).append(r)
-                if r["tool"]:
+                # A call the injector never saw (a tool the harness lacks) is not mapped.
+                if r["tool"] and r["logged"]:
                     seen_tools[r["tool"]] = c
                 ev = trial / "agent/tt/events.jsonl"
                 if ev.exists():
