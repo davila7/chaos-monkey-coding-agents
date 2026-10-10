@@ -212,6 +212,23 @@ Alternatives considered: reimplementing the schedule inside the hooks module wit
 
 Consequences: conformance must confirm that `{ deny }` after `next` is honored for `falsefail` and how the model sees `deny` text compared with a real tool error. Each decision costs one process start, outside the hook's 10 s budget.
 
+## D-0015 Banned words in the agent-visible engine config
+
+- Date: 2026-10-10
+- Status: **Proposed**, needs the owner's decision
+
+Context: the Harbor agents write the resolved engine config to `/opt/tt/config.json`, inside the agent container. SPEC 7.2 bans the listed words in any agent-visible file or payload. The config carries the profile field `max_faults_per_trial` (SPEC 7.5 and the frozen profile files) and the profile name. The lint checks built bundles, catalog text and task files, but not this generated file, so the leak is currently unchecked. Today it is the only banned token in a resolved config; profile names (`clean`, `light`, `moderate`, `heavy`, `byzantine`) and fault type ids are not banned.
+
+Options:
+
+1. Rename the profile field to `max_applied_per_trial` (`tt-profile/2`), amend SPEC 7.5, update the five profile files, and add a lint check that runs every profile through `resolveEngineConfig` and bans the words in the result.
+2. Keep the profile files as specified and write a separate wire form to `/opt/tt` with neutral keys, translated back inside `tt-decide`. Two names for one field.
+3. Obfuscate the config file (for example base64). Hides the word from a casual read only; an agent that decodes it still sees it.
+
+Recommendation: option 1, before any real runs, since nothing is frozen yet and the lint check also covers future fields.
+
+Consequences: option 1 changes a frozen-looking file format before M6, which is cheap now; the check makes any later leak a CI failure.
+
 ## D-0016 Results site
 
 - Date: 2026-10-10

@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 from pydantic import BaseModel, Field
 
 REMOTE_ROOT = "/opt/tt"
@@ -11,6 +12,9 @@ REMOTE_CONFIG = f"{REMOTE_ROOT}/config.json"
 REMOTE_STATE = f"{REMOTE_ROOT}/state"
 REMOTE_LOG_DIR = "/logs/agent/tt"
 REMOTE_LOG = f"{REMOTE_LOG_DIR}/events.jsonl"
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+RESOLVED_SCHEMA_PATH = REPO_ROOT / "packages/fault-engine/schemas/tt-engine-1.resolved.schema.json"
 
 
 class TtOptions(BaseModel):
@@ -36,12 +40,23 @@ def trial_task_name(logs_dir: Path) -> str:
 
 
 def engine_config(config_dir: Path, task: str, attempt: int, trial_id: str) -> dict[str, Any]:
-    cfg = json.loads((config_dir / f"{task}.json").read_text())
-    if cfg.get("schema") != "tt-engine/1":
-        raise ValueError(f"{config_dir / f'{task}.json'}: not a tt-engine/1 config")
+    """The task's resolved engine config with this trial's attempt and id.
+
+    Validated against the resolved schema before upload: `tt-decide` cannot
+    apply defaults itself, and an unresolved config would otherwise only show
+    up as error records inside the trial.
+    """
+    path = config_dir / f"{task}.json"
+    cfg = {**json.loads(path.read_text()), "attempt": attempt, "trial_id": trial_id}
     if cfg.get("task_id") != task:
-        raise ValueError(f"engine config task_id {cfg.get('task_id')!r} does not match task {task!r}")
-    return {**cfg, "attempt": attempt, "trial_id": trial_id}
+        raise ValueError(f"{path}: task_id {cfg.get('task_id')!r} does not match task {task!r}")
+    schema = json.loads(RESOLVED_SCHEMA_PATH.read_text())
+    try:
+        jsonschema.validate(cfg, schema)
+    except jsonschema.ValidationError as e:
+        where = "/".join(str(p) for p in e.absolute_path) or "<root>"
+        raise ValueError(f"{path}: not a resolved tt-engine/1 config at {where}: {e.message}") from None
+    return cfg
 
 
 def read_events(logs_dir: Path) -> list[dict[str, Any]]:

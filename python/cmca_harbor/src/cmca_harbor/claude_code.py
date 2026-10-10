@@ -33,6 +33,9 @@ class ChaosClaudeCode(TtAgentMixin, ClaudeCode):
         env = await self._tt_prepare(environment)
         if env:
             env["CLAUDE_CODE_PLUGIN_DIRS"] = f"{REMOTE_ROOT}/{self.HARNESS_DIR}"
+            # The local probe on 2026-10-10 passed this; whether 2.1.x loads
+            # function hooks without it is not yet verified (V-01).
+            env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] = "1"
         with environment.scoped_exec_env(env):
             await super().run(instruction, environment, context)
 

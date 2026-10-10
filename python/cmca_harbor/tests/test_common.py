@@ -27,13 +27,56 @@ def test_trial_task_name_prefers_trial_config(tmp_path: Path):
     assert trial_task_name(trial / "agent") == "fix_parser"
 
 
+RESOLVED = {
+    "schema": "tt-engine/1",
+    "seed": "s",
+    "trial_id": None,
+    "task_id": "t1",
+    "attempt": 0,
+    "harness": "claude-code",
+    "layer": "native",
+    "workspace_root": "/app",
+    "profile": {
+        "schema": "tt-profile/1",
+        "name": "clean",
+        "base_rate": 0,
+        "max_faults_per_trial": 0,
+        "warmup_calls": 0,
+        "persistence": {},
+        "weights": {},
+        "class_rate_multipliers": {},
+    },
+    "parity_set": [],
+    "catalog_version": "v1",
+    "task": {
+        "schema": "tt-task/1",
+        "exposure": {"expected_classes": []},
+        "poison": [],
+        "non_idempotent": [],
+        "drift": [],
+        "alternatives": [],
+        "exempt": {"paths": []},
+    },
+    "exempt_paths": [],
+    "variants": {},
+}
+
+
 def test_engine_config_sets_attempt_and_trial(tmp_path: Path):
-    (tmp_path / "t1.json").write_text(json.dumps({"schema": "tt-engine/1", "task_id": "t1", "attempt": 0}))
+    (tmp_path / "t1.json").write_text(json.dumps(RESOLVED))
     cfg = engine_config(tmp_path, "t1", 3, "t1__x")
     assert (cfg["attempt"], cfg["trial_id"]) == (3, "t1__x")
-    (tmp_path / "t2.json").write_text(json.dumps({"schema": "tt-engine/1", "task_id": "other"}))
-    with pytest.raises(ValueError):
+    (tmp_path / "t2.json").write_text(json.dumps(RESOLVED))
+    with pytest.raises(ValueError, match="does not match task"):
         engine_config(tmp_path, "t2", 0, "x")
+
+
+def test_engine_config_rejects_an_unresolved_config(tmp_path: Path):
+    raw = {k: v for k, v in RESOLVED.items() if k != "workspace_root"}
+    raw["task"] = {"schema": "tt-task/1"}
+    (tmp_path / "t1.json").write_text(json.dumps(raw))
+    with pytest.raises(ValueError, match="not a resolved tt-engine/1 config"):
+        engine_config(tmp_path, "t1", 0, "x")
 
 
 def test_read_events(tmp_path: Path):
