@@ -32,6 +32,7 @@ Layout:
 |---|---|
 | `packages/fault-engine` | Fault schedule, trial state store, catalog, schemas, `tt-decide` CLI |
 | `packages/cli` | `cmca` CLI (`lint` today) |
+| `packages/site` | Results site (Next.js static export for Vercel) |
 | `python/cmca_analysis` | Analysis pipeline (event log validation today) |
 | `profiles/` | Fault profiles |
 | `configs/` | Harness configurations |
