@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.png" alt="Chaos Monkey for Coding Agents" width="100%">
+</p>
+
 # Chaos Monkey for Coding Agents
 
 How coding-agent harnesses recover when their tools fail. A fault-injection benchmark.
