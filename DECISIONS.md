@@ -211,3 +211,25 @@ Decision:
 Alternatives considered: reimplementing the schedule inside the hooks module with `crypto.subtle` and `$.fs` (two engine implementations, against SPEC 16); returning a schema-shaped error `{ result }` for `err` (per-tool shapes with no error flag, and V-01 check 2 is still open).
 
 Consequences: conformance must confirm that `{ deny }` after `next` is honored for `falsefail` and how the model sees `deny` text compared with a real tool error. Each decision costs one process start, outside the hook's 10 s budget.
+
+## D-0016 Results site
+
+- Date: 2026-10-10
+- Status: Proposed. The owner asked for the results site on 2026-10-10; merging the PR approves it.
+
+Context: D-0013 item 8 plans a minimal static page for the smoke run. On 2026-10-10 the owner asked for the public results site, deployed to Vercel, with a leaderboard in the style of tbench.ai. SPEC 9.8 describes the full site for M7; SPEC 9.7 names the analysis output but defines no file format for site data. No result artifact exists yet: the conformance batch running on the owner's machine produces capability data, not leaderboard rows.
+
+Decision:
+
+1. The site lives in `packages/site` (SPEC 17), as a Next.js 16 static export with no chart library: the two charts are hand-written SVG, which stays within SPEC 18's "one chart library" limit.
+2. The site reads one file, `packages/site/data/results.json`, schema `site-data/1` (zod, `src/lib/schema.ts`). It holds boards, and per config the SPEC 11 headline columns with 95% intervals (Faulted Success, clean pass^1, RR, pass^3 under `moderate`, Overclaim rate, Poison Propagation Rate, dollars per success, tokens) and the degradation curve. `cmca analyze` is expected to write this file; until it does, the committed file has no boards and the site shows "No published results yet".
+3. A `kind` field separates `release`, `smoke` and `sample`. `smoke` shows the D-0013 label "smoke run, not a benchmark result" and hides bands. `sample` is a separate file, `data/sample.json`, used only when `SITE_DATA=sample` is set at build time; it shows a warning banner, uses invented harness and model names (`Sample harness A`, `sample-model-1`), and the loader refuses a `results.json` whose kind is `sample`. This keeps SPEC 0 ("no placeholder or estimated results in docs") intact for production builds while the layout can be previewed.
+4. Rank bands (SPEC 12) replace ordinal ranks. Rows are sorted by Faulted Success; a new band starts when a row's interval does not overlap the interval of the first row in the current band. Overlap is not transitive, so this greedy rule is a choice; it is unit-tested.
+5. Views: table (sortable, default sort Faulted Success), Pareto (Faulted Success against dollars per success), and degradation curves (pass^1 against base rate). `/data.json` serves the same file for download.
+6. Vercel: Root Directory `packages/site`; `vercel.json` installs only `@cmca/site` from the workspace lockfile and serves `out/`.
+
+Not in this change: the Config detail, Methodology, Tasks, Capabilities, Submit and Changelog pages from SPEC 9.8, Harbor Hub reads (V-15), and the per-fault heatmap. They wait for data that exists.
+
+Alternatives considered: a `web/` directory at the repository root (SPEC 17 already names `packages/site`); sample rows with real harness names (a screenshot would read as a result); a chart library such as Recharts (two charts did not justify the dependency).
+
+Consequences: `cmca analyze` must emit `site-data/1`; any field change goes through this schema and its tests. Next 16 type-checks with the TypeScript 5 API, so the site sets `typescript.ignoreBuildErrors` and relies on `pnpm typecheck` (tsc 7) in CI.
