@@ -8,7 +8,7 @@ How coding-agent harnesses recover when their tools fail. A fault-injection benc
 
 CMCA injects seeded faults into tool calls at two layers: an MCP proxy in front of mock services (Track S) and each harness's own built-in tools (Track N). It measures task success under faults, recovery behavior, the cost of recovery, and whether the agent reports its outcome honestly. The full design is in [SPEC.md](SPEC.md).
 
-Results and build log: [chaos-monkey-bench.vercel.app](https://chaos-monkey-bench.vercel.app) (source in `packages/site`).
+Results and build log: [chaos-monkey-coding-agents.vercel.app](https://chaos-monkey-coding-agents.vercel.app) (source in `packages/site`).
 
 ## Status
 
