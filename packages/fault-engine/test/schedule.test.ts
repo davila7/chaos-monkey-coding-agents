@@ -4,7 +4,7 @@ import { FAULT_TYPES, type CallSignature } from '../src/types.js';
 import { catalog, config, profile, profileWith, sig } from './helpers.js';
 
 const always = (name = 'moderate', over = {}) =>
-  profileWith(profile(name), { base_rate: 1, max_faults_per_trial: 100, ...over });
+  profileWith(profile(name), { base_rate: 1, max_applied_per_trial: 100, ...over });
 
 function run(cfg: ReturnType<typeof config>, s: CallSignature, times: number) {
   const state = emptyState();
@@ -140,7 +140,7 @@ describe('type eligibility', () => {
 
 describe('latency', () => {
   it('draws a delay between 2 and 20 seconds', () => {
-    const p = always('moderate', { weights: { latency: 1 }, max_faults_per_trial: 1e9 });
+    const p = always('moderate', { weights: { latency: 1 }, max_applied_per_trial: 1e9 });
     const cfg = config({ layer: 'service', profile: p });
     const state = emptyState();
     for (let i = 0; i < 500; i++) {

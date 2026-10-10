@@ -274,7 +274,7 @@ Parity across harnesses is distributional: the same rates, type mix, persistence
 
 ### 7.6 Caps and exemptions
 
-- Per-trial cap from the profile (`max_faults_per_trial`).
+- Per-trial cap from the profile (`max_applied_per_trial`).
 - `warmup_calls` (default 0): number of initial eligible calls that are never faulted.
 - Exempt paths: `/app/STATUS.json` (keeps the self-report metric clean), `/tests`, `/solution`, `/logs`, harness configuration directories, injector directories.
 - Exempt classes: everything listed as out of scope in 7.3.
@@ -1016,10 +1016,10 @@ For Track N poison variants, the build step bundles variant content into the inj
 ### B.5 Profile (`profiles/moderate.yaml`)
 
 ```yaml
-schema: tt-profile/1
+schema: tt-profile/2
 name: moderate
 base_rate: 0.15
-max_faults_per_trial: 6
+max_applied_per_trial: 6
 warmup_calls: 0
 persistence:
   transient: 0.70

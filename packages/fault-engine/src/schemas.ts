@@ -24,10 +24,10 @@ const persistenceKey = /^(transient|outage|sticky_[1-9][0-9]*)$/;
 
 export const ProfileSchema = z
   .object({
-    schema: z.literal('tt-profile/1'),
+    schema: z.literal('tt-profile/2'),
     name: z.string().regex(/^[a-z][a-z0-9-]*$/),
     base_rate: rate,
-    max_faults_per_trial: z.number().int().min(0),
+    max_applied_per_trial: z.number().int().min(0),
     warmup_calls: z.number().int().min(0).default(0),
     persistence: z.record(z.string().regex(persistenceKey), rate).default({}),
     outage_window: z.number().int().min(1).optional(),
@@ -245,7 +245,7 @@ export const SubmissionMetadataSchema = z
 export type SubmissionMetadata = z.infer<typeof SubmissionMetadataSchema>;
 
 export const ALL_SCHEMAS = {
-  'tt-profile-1': ProfileSchema,
+  'tt-profile-2': ProfileSchema,
   'tt-catalog-1': CatalogSchema,
   'tt-task-1': TaskChaosSchema,
   'tt-engine-1': EngineConfigSchema,

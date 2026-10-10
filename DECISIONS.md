@@ -215,7 +215,7 @@ Consequences: conformance must confirm that `{ deny }` after `next` is honored f
 ## D-0015 Banned words in the agent-visible engine config
 
 - Date: 2026-10-10
-- Status: **Proposed**, needs the owner's decision
+- Status: Accepted, option 1. The owner chose it in the thread on 2026-10-10.
 
 Context: the Harbor agents write the resolved engine config to `/opt/tt/config.json`, inside the agent container. SPEC 7.2 bans the listed words in any agent-visible file or payload. The config carries the profile field `max_faults_per_trial` (SPEC 7.5 and the frozen profile files) and the profile name. The lint checks built bundles, catalog text and task files, but not this generated file, so the leak is currently unchecked. Today it is the only banned token in a resolved config; profile names (`clean`, `light`, `moderate`, `heavy`, `byzantine`) and fault type ids are not banned.
 
@@ -228,6 +228,8 @@ Options:
 Recommendation: option 1, before any real runs, since nothing is frozen yet and the lint check also covers future fields.
 
 Consequences: option 1 changes a frozen-looking file format before M6, which is cheap now; the check makes any later leak a CI failure.
+
+Implemented 2026-10-10: profiles are `tt-profile/2` with `max_applied_per_trial`; SPEC 7.5 and B.5 are amended. `cmca lint` resolves every file in `profiles/` into the engine config written to `/opt/tt/config.json` and checks every key and string value. `schemas/tt-profile-1.schema.json` stays as the superseded definition (CLAUDE.md rule 2).
 
 ## D-0016 Results site
 

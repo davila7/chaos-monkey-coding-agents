@@ -104,3 +104,19 @@ describe('canary', () => {
     expect(lint(REPO)).toEqual([]);
   });
 });
+
+describe('resolved profile configs', () => {
+  const yaml = (cap: string) =>
+    `schema: tt-profile/2\nname: moderate\nbase_rate: 0.1\n${cap}: 6\npersistence: { transient: 1 }\nweights: { deny: 1 }\n`;
+
+  it('blocks banned words in the config written into the agent container', () => {
+    const root = fixture({ 'profiles/moderate.yaml': yaml('max_applied_per_trial').replace('name: moderate', 'name: chaos') });
+    expect(lint(root)).toEqual([
+      expect.objectContaining({ rule: 'banned-word', file: 'profiles/moderate.yaml', detail: 'resolved config $.profile.name: "chaos"' }),
+    ]);
+  });
+
+  it('passes the committed profiles', () => {
+    expect(lint(REPO).filter((i) => i.file.startsWith('profiles/'))).toEqual([]);
+  });
+});

@@ -37,10 +37,10 @@ RESOLVED = {
     "layer": "native",
     "workspace_root": "/app",
     "profile": {
-        "schema": "tt-profile/1",
+        "schema": "tt-profile/2",
         "name": "clean",
         "base_rate": 0,
-        "max_faults_per_trial": 0,
+        "max_applied_per_trial": 0,
         "warmup_calls": 0,
         "persistence": {},
         "weights": {},
