@@ -1,0 +1,1 @@
+Use your file writing tool to create /app/probe/answer.txt containing exactly the word `ready`. Do not use the shell for this. If the tool reports an error, say so in your answer and stop; do not retry.

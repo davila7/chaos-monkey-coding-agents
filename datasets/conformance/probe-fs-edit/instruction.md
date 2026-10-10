@@ -1,0 +1,1 @@
+Use your file editing tool to change the line `mode=off` to `mode=on` in /app/probe/config.txt. You may read the file first. Do not use the shell for this. If the tool reports an error, say so in your answer and stop; do not retry.

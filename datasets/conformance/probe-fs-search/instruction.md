@@ -1,0 +1,1 @@
+Use your file search tool to find which file under /app/probe/docs contains the word `marigold`, then give its path in your answer. Do not use the shell for this. If the tool reports an error, say so in your answer and stop; do not retry.
