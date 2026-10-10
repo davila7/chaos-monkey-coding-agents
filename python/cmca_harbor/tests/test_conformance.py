@@ -148,3 +148,16 @@ def test_report_builds_the_parity_set_with_gaps(tmp_path: Path):
     assert caps["tool_map"] == {"read": "fs.read", "write": "fs.write"}
     assert caps["crash_behavior"] == "fail_open"
     assert caps["injector_p95_ms"] == 2.0
+
+
+def test_archive_copies_only_the_evidence(tmp_path: Path):
+    jobs = tmp_path / "jobs"
+    t = _trial(jobs / "conf-pi-deny-a0", "read", "probe-fs-read", "read", "x", [_event("deny", "fs.read", "deny.eacces")], None)
+    (t / "agent/sessions").mkdir()
+    (t / "agent/sessions/raw.jsonl").write_text("{}")
+    assert conf.archive(jobs, tmp_path / "out") == 3
+    assert sorted(p.relative_to(tmp_path / "out").as_posix() for p in (tmp_path / "out").rglob("*") if p.is_file()) == [
+        "conf-pi-deny-a0/read/agent/trajectory.json",
+        "conf-pi-deny-a0/read/agent/tt/events.jsonl",
+        "conf-pi-deny-a0/read/config.json",
+    ]

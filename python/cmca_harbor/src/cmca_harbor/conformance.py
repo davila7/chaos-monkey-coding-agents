@@ -271,7 +271,8 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
                 c = task_class[_task_of(trial)]
                 r = check_trial(trial, harness, t, c)
                 per_cell.setdefault((t, c), []).append(r)
-                if r["tool"]:
+                # A call the injector never saw (a tool the harness lacks) is not mapped.
+                if r["tool"] and r["logged"]:
                     seen_tools[r["tool"]] = c
                 ev = trial / "agent/tt/events.jsonl"
                 if ev.exists():
@@ -331,6 +332,26 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
     }
 
 
+# What `report` reads from each trial; copied next to the capability file so
+# every number in it traces to a committed artifact (CLAUDE.md rule 4).
+EVIDENCE = ("config.json", "result.json", "agent/trajectory.json", "agent/tt/events.jsonl", "verifier/state.json")
+
+
+def archive(jobs: Path, dest: Path) -> int:
+    """Copies the evidence files of every conformance trial under `jobs` to `dest`."""
+    copied = 0
+    for job in sorted(p for p in jobs.iterdir() if p.is_dir() and p.name.startswith("conf-")):
+        for trial in _trials(jobs, job.name):
+            for rel in EVIDENCE:
+                src = trial / rel
+                if src.exists():
+                    out = dest / job.name / trial.name / rel
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src, out)
+                    copied += 1
+    return copied
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cmca_harbor.conformance")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -348,6 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--jobs", required=True, type=Path)
     r.add_argument("--gap", action="append", default=[], help="type:class=reason, a cell conformance showed undeliverable (D-0017)")
     r.add_argument("--out", type=Path, default=REPO_ROOT / "capabilities")
+    r.add_argument("--evidence", type=Path, default=REPO_ROOT / "results/conformance", help="where the trial evidence is copied")
     args = ap.parse_args(argv)
 
     if args.cmd == "tasks":
@@ -370,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
     path = args.out / f"{args.harness}@{args.version}.json"
     path.write_text(json.dumps(caps, indent=2) + "\n")
     print(path)
+    print(f"{archive(args.jobs, args.evidence / f'{args.harness}@{args.version}')} evidence files")
     return 0
 
 
