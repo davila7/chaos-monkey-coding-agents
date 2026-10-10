@@ -23,10 +23,10 @@ function engineConfig(weights: Record<string, number>, overrides: Record<string,
     harness: 'claude-code',
     layer: 'native',
     profile: {
-      schema: 'tt-profile/1',
+      schema: 'tt-profile/2',
       name: 'probe',
       base_rate: 1,
-      max_faults_per_trial: 100,
+      max_applied_per_trial: 100,
       persistence: { transient: 1 },
       weights,
     },
@@ -132,7 +132,7 @@ describe('handle with the real engine', () => {
   });
 
   it('records the subagent id', async () => {
-    const { run, log } = realRun(engineConfig({ deny: 1 }, { profile: { schema: 'tt-profile/1', name: 'clean', base_rate: 0, max_faults_per_trial: 0 } }));
+    const { run, log } = realRun(engineConfig({ deny: 1 }, { profile: { schema: 'tt-profile/2', name: 'clean', base_rate: 0, max_applied_per_trial: 0 } }));
     await handle({ ...bash('ls'), agentId: 'a-1' }, nextSpy(bashResult('')).next, run);
     expect(JSON.parse(readFileSync(log, 'utf8').trim())).toMatchObject({ agent_id: 'a-1', decision: 'pass' });
   });

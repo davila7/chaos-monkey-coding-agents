@@ -176,7 +176,7 @@ export function step(
   const seq = state.seq++;
   const eligibleIndex = state.eligible++;
   const base = { key, occurrence, seq };
-  const cap = cfg.profile.max_faults_per_trial;
+  const cap = cfg.profile.max_applied_per_trial;
 
   const priorOutage = state.outage;
   const tickOutage = () => {

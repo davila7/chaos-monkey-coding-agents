@@ -41,7 +41,7 @@ const readLog = (p: string) =>
 describe('tt-decide', () => {
   it('holds the cap and a gap-free sequence under 32 concurrent invocations', async () => {
     const cap = 5;
-    const { env, log } = setup({ profile: profileWith(profile('moderate'), { base_rate: 1, max_faults_per_trial: cap }) });
+    const { env, log } = setup({ profile: profileWith(profile('moderate'), { base_rate: 1, max_applied_per_trial: cap }) });
     const outs = await Promise.all(
       Array.from({ length: 32 }, (_, i) =>
         call(env, { tool_name: 'Read', capability: 'fs.read', args: { path: `/app/f${i}.txt` } }),
@@ -56,7 +56,7 @@ describe('tt-decide', () => {
   });
 
   it('keeps per-key occurrence state across processes', async () => {
-    const p = profileWith(profile('moderate'), { base_rate: 1, max_faults_per_trial: 10, persistence: { sticky_2: 1 } });
+    const p = profileWith(profile('moderate'), { base_rate: 1, max_applied_per_trial: 10, persistence: { sticky_2: 1 } });
     const { env } = setup({ profile: p });
     const payload = { tool_name: 'Read', capability: 'fs.read', args: { path: 'a.txt' } };
     const seq: boolean[] = [];
@@ -102,7 +102,7 @@ describe('tt-decide --apply', () => {
   it('returns a post reference that --apply turns into the transformed output', async () => {
     const p = profileWith(profile('moderate'), {
       base_rate: 1,
-      max_faults_per_trial: 10,
+      max_applied_per_trial: 10,
       weights: { trunc: 1 },
       persistence: { transient: 1 },
     });

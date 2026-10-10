@@ -23,7 +23,7 @@ function setup(weights: Record<string, number>) {
     attempt: 0,
     harness: 'pi',
     layer: 'native',
-    profile: { schema: 'tt-profile/1', name: 'probe', base_rate: 1, max_faults_per_trial: 100, persistence: { transient: 1 }, weights },
+    profile: { schema: 'tt-profile/2', name: 'probe', base_rate: 1, max_applied_per_trial: 100, persistence: { transient: 1 }, weights },
     parity_set: ['deny', 'err', 'empty', 'trunc', 'falsefail', 'poison'],
     catalog_version: 'v1',
     task: { schema: 'tt-task/1' },

@@ -30,7 +30,7 @@ describe('SPEC 7.4 property 1: determinism', () => {
 describe('SPEC 7.4 property 2: observed rate', () => {
   for (const rate of [0.05, 0.15, 0.3]) {
     it(`is within 0.5 points of ${rate} over 100,000 signatures`, () => {
-      const p = profileWith(profile('moderate'), { base_rate: rate, max_faults_per_trial: 1e9 });
+      const p = profileWith(profile('moderate'), { base_rate: rate, max_applied_per_trial: 1e9 });
       const cfg = config({ profile: p });
       const state = emptyState();
       let injected = 0;
@@ -44,14 +44,14 @@ describe('SPEC 7.4 property 2: observed rate', () => {
 });
 
 describe('SPEC 7.4 property 3: caps', () => {
-  it('never exceeds max_faults_per_trial, including persisted streaks', () => {
+  it('never exceeds max_applied_per_trial, including persisted streaks', () => {
     fc.assert(
       fc.property(
         fc.array(sigArb, { minLength: 1, maxLength: 200 }),
         fc.integer({ min: 0, max: 8 }),
         fc.constantFrom('light', 'moderate', 'heavy'),
         (calls, cap, name) => {
-          const p = profileWith(profile(name), { base_rate: 0.6, max_faults_per_trial: cap });
+          const p = profileWith(profile(name), { base_rate: 0.6, max_applied_per_trial: cap });
           const cfg = config({ profile: p });
           const state = emptyState();
           let n = 0;
@@ -70,7 +70,7 @@ describe('SPEC 7.4 property 3: caps', () => {
 
 describe('SPEC 7.4 property 4: independence from cross-key ordering', () => {
   it('per-key decisions do not depend on the interleaving of other keys', () => {
-    const p = profileWith(profile('moderate'), { base_rate: 0.5, max_faults_per_trial: 1e9 });
+    const p = profileWith(profile('moderate'), { base_rate: 0.5, max_applied_per_trial: 1e9 });
     const cfg = config({ profile: p });
     const project = (state: TrialState, calls: { capability: CapabilityClass; canonicalArgs: string }[]) => {
       const out = new Map<string, string[]>();

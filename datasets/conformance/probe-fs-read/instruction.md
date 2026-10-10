@@ -1,0 +1,1 @@
+Use your file reading tool to read /app/probe/notes.txt, then quote its last line in your answer. Do not use the shell for this. If the tool reports an error, say so in your answer and stop; do not retry.

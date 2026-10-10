@@ -8,7 +8,7 @@ import { MemoryStateStore, type StateStore } from '../src/state.js';
 import { truncateHead30 } from '../src/transforms.js';
 import { ROOT, catalog, config, profile, profileWith, sig } from './helpers.js';
 
-const always = (over = {}) => profileWith(profile('moderate'), { base_rate: 1, max_faults_per_trial: 100, ...over });
+const always = (over = {}) => profileWith(profile('moderate'), { base_rate: 1, max_applied_per_trial: 100, ...over });
 
 describe('engine', () => {
   it('logs one valid record per eligible call, injected or not', () => {
@@ -94,7 +94,7 @@ describe('repository data files', () => {
     expect(files.sort()).toEqual(Object.keys(expected).map((n) => `${n}.yaml`).sort());
     for (const [name, [rate, cap]] of Object.entries(expected)) {
       const p = loadProfile(`${ROOT}profiles/${name}.yaml`);
-      expect([p.name, p.base_rate, p.max_faults_per_trial]).toEqual([name, rate, cap]);
+      expect([p.name, p.base_rate, p.max_applied_per_trial]).toEqual([name, rate, cap]);
     }
   });
 

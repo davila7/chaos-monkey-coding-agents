@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { parse } from 'acorn';
 import { simple } from 'acorn-walk';
+import { loadProfile, resolveEngineConfig } from '@cmca/fault-engine';
 import { bannedHits } from './words.js';
 
 export interface LintIssue {
@@ -62,6 +63,34 @@ export function bundleStrings(source: string, sourceType: 'script' | 'module' = 
   return { strings, envNames: [...envNames] };
 }
 
+/** Every object key and string value in a JSON value, with its path. */
+function jsonTokens(v: unknown, path = '$'): [string, string][] {
+  if (typeof v === 'string') return [[path, v]];
+  if (Array.isArray(v)) return v.flatMap((x, i) => jsonTokens(x, `${path}[${i}]`));
+  if (v === null || typeof v !== 'object') return [];
+  return Object.entries(v).flatMap(([k, x]) => [[`${path} key`, k] as [string, string], ...jsonTokens(x, `${path}.${k}`)]);
+}
+
+/**
+ * The engine config a profile produces, as written to /opt/tt/config.json
+ * inside the agent container. Fields outside the profile get neutral values;
+ * task fields are covered by the task file checks.
+ */
+export function profileWireConfig(profilePath: string): unknown {
+  return resolveEngineConfig({
+    schema: 'tt-engine/1',
+    seed: 's',
+    task_id: 't',
+    attempt: 0,
+    harness: 'h',
+    layer: 'native',
+    profile: loadProfile(profilePath),
+    parity_set: [],
+    catalog_version: 'v1',
+    task: { schema: 'tt-task/1' },
+  });
+}
+
 export interface LintOptions {
   /** Built single-file artifacts that are copied into agent containers. */
   artifacts?: string[];
@@ -92,6 +121,10 @@ export function lint(root: string, opts: LintOptions = {}): LintIssue[] {
       banned(rel(f), `entry ${e.id} id`, e.id);
       banned(rel(f), `entry ${e.id} text`, e.text);
     }
+  }
+
+  for (const f of walk(join(root, 'profiles')).filter((p) => p.endsWith('.yaml'))) {
+    for (const [where, text] of jsonTokens(profileWireConfig(f))) banned(rel(f), `resolved config ${where}`, text);
   }
 
   for (const f of opts.artifacts ?? defaultArtifacts(root)) {
