@@ -284,3 +284,21 @@ Decision: the site gets `/blog`, with posts as Markdown files in `packages/site/
 Alternatives considered: a post on an external platform (numbers would leave the repository's review process); MDX (a compiler and a second content format for two diagrams).
 
 Consequences: tests check that posts parse, use no em or en dashes, and reference only images that exist.
+
+## D-0019 OpenCode on the v1 hooks
+
+- Date: 2026-10-10
+- Status: Accepted. The owner chose option (b) of V-06 in the thread on 2026-10-10.
+
+Context: SPEC 9.3 says to support OpenCode v2 only, on a pinned v2 release. As of 2026-10-10 no v2 release exists on npm (`latest` is 1.18.35; v2 hooks exist only in snapshot builds). V-06 listed three options: pin a snapshot, use the v1 hooks with conformance as the gate, or defer `opencode-claude`.
+
+Decision:
+
+1. `injector-opencode` uses `tool.execute.before` and `tool.execute.after` on the pinned semver release (1.18.35). Pre-phase types and `falsefail` throw the catalog text; `empty`, `trunc` and `poison` replace `output.output`. Any other failure inside the hooks passes the call through, because a throw becomes a tool error.
+2. The plugin ships as one ES module at `/opt/tt/oc/index.js`, default-exporting `{ id: "tt-runtime", server }`, and `ChaosOpenCode` adds it to the `plugin` array of the `opencode.json` that Harbor writes. The module exports nothing else, because OpenCode calls every exported function as a plugin.
+3. `tt-decide` runs on the `node` that Harbor's install puts on `PATH`, since OpenCode is a compiled binary and its own executable is not Node.
+4. SPEC 9.3, the 7.3 table row and the M1 row are read as "OpenCode, pinned release" until a v2 release ships; moving to v2 is a harness version bump that reruns conformance.
+
+Alternatives considered: pinning a beta snapshot (snapshots are unversioned builds and V-06 found no stable tag); deferring OpenCode (M1 would cover two harnesses).
+
+Consequences: the reported v1 bugs (`tool.execute.after` not firing on failure, MCP calls bypassing hooks) are checked by conformance rather than avoided. V-06 shows `after` not altering failed calls, and Track N does not use MCP tools. If conformance fails a cell, it becomes a parity gap (D-0017) or drops the type.

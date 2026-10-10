@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cmca_harbor import ChaosClaudeCode, ChaosPi
+from cmca_harbor import ChaosClaudeCode, ChaosOpenCode, ChaosPi
 from cmca_harbor.claude_code import ChaosClaudeCodeOptions
 from cmca_harbor.pi import ChaosPiOptions
 from cmca_harbor.common import engine_config, read_events, trial_task_name
@@ -92,3 +92,18 @@ def test_pi_adds_the_extension_flag_only_when_active(tmp_path: Path):
     assert on.build_cli_flags().endswith("--extension /opt/tt/pi/index.js")
     off = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m")
     assert "--extension" not in off.build_cli_flags()
+
+
+def test_opencode_adds_the_plugin_only_when_active(tmp_path: Path):
+    on = ChaosOpenCode(
+        logs_dir=tmp_path,
+        model_name="anthropic/m",
+        attempt_index=0,
+        tt_config_dir="/c",
+        tt_build_dir="/b",
+        opencode_config={"plugin": ["other"]},
+    )
+    command = on._build_register_config_command()
+    assert '"file:///opt/tt/oc/index.js"' in command and '"other"' in command
+    off = ChaosOpenCode(logs_dir=tmp_path, model_name="anthropic/m")
+    assert "plugin" not in (off._build_register_config_command() or "")
