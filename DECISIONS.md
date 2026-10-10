@@ -269,3 +269,16 @@ Decision (proposed): option 1. Implemented in this change: `parity_gaps` in `tt-
 Alternatives considered: options 2 and 3 above.
 
 Consequences: a config's effective type mix differs per class when it has gaps, which the per-class exposure report must show. Board comparisons stay restricted to the parity set; a gap on one harness does not remove the type from the others. The capability file format must carry gaps once the conformance generator lands.
+
+## D-0018 Build log on the results site
+
+- Date: 2026-10-10
+- Status: Proposed. The owner asked for it on 2026-10-10; merging the PR approves it.
+
+Context: the owner asked to publish the first conformance batch as a blog post that explains, in plain terms, how the benchmark is being built. SPEC 15.1 lists no blog, and SPEC 0 and rule 4 require every published number to come from a committed artifact.
+
+Decision: the site gets `/blog`, with posts as Markdown files in `packages/site/content/blog/YYYY-MM-DD-<slug>.md` (rule 10), rendered at build time with `marked`, and diagrams as SVG files in `public/blog/`. Posts cite numbers only from committed files and link to them. The first post's conformance counts come from V-01 and V-10, which record them as reported from the owner's machine; the post says the same and gives no cost figure, because none is committed. Posts are not part of the SPEC 15.1 documentation set and never replace METHODOLOGY.md.
+
+Alternatives considered: a post on an external platform (numbers would leave the repository's review process); MDX (a compiler and a second content format for two diagrams).
+
+Consequences: tests check that posts parse, use no em or en dashes, and reference only images that exist.
