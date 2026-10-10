@@ -128,6 +128,11 @@ export const EngineConfigSchema = z
     workspace_root: z.string().default('/app'),
     profile: ProfileSchema,
     parity_set: z.array(FaultTypeSchema),
+    /**
+     * (type, capability) cells conformance found undeliverable on this
+     * harness version (D-0017). `capability` accepts the catalog's `mcp.*` form.
+     */
+    parity_gaps: z.array(z.object({ type: FaultTypeSchema, capability: z.string() }).strict()).default([]),
     catalog_version: z.string(),
     task: TaskChaosSchema,
     /** Path prefixes never faulted, in addition to the task's own exemptions. */

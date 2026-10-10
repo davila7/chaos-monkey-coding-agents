@@ -28,6 +28,7 @@ writeFileSync(
     workspace_root: '/app',
     profile,
     parity_set: ['deny', 'err', 'inarg', 'empty', 'trunc', 'falsefail', 'poison'],
+    parity_gaps: [],
     catalog_version: 'v1',
     task: { schema: 'tt-task/1', exposure: { expected_classes: [] }, poison: [], non_idempotent: [], drift: [], alternatives: [], exempt: { paths: [] } },
     exempt_paths: [],

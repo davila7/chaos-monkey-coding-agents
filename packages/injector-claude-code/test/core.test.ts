@@ -75,7 +75,14 @@ describe('tool mapping', () => {
 
   it('keeps result shapes valid when replacing text', () => {
     const read = { type: 'text', file: { filePath: '/a', content: 'a\nb\nc', numLines: 3, startLine: 1, totalLines: 3 } };
-    expect(textView('Read', read)!.with('a')).toEqual({ ...read, file: { ...read.file, content: 'a', numLines: 1 } });
+    expect(textView('Read', read)!.with('a')).toEqual({
+      ...read,
+      file: { ...read.file, content: 'a', numLines: 1, totalLines: 1 },
+    });
+    const empty = textView('Read', { type: 'text', file: { ...read.file, totalLines: 41 } })!.with('') as typeof read;
+    expect(empty.file).toMatchObject({ numLines: 0, totalLines: 0 });
+    const tail = { type: 'text', file: { ...read.file, startLine: 10, totalLines: 41 } };
+    expect((textView('Read', tail)!.with('x\ny') as typeof read).file.totalLines).toBe(11);
     const glob = { durationMs: 1, numFiles: 2, filenames: ['/a', '/b'], truncated: false };
     expect(textView('Glob', glob)!.with('')).toEqual({ ...glob, filenames: [], numFiles: 0 });
     expect(textView('Read', { type: 'image', file: {} })).toBeNull();

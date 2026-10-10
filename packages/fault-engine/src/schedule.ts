@@ -85,6 +85,7 @@ export function candidateTypes(cfg: EngineConfig, catalog: readonly CatalogEntry
   for (const type of FAULT_TYPES) {
     const weight = cfg.profile.weights[type] ?? 0;
     if (weight <= 0 || !parity.has(type)) continue;
+    if (cfg.parity_gaps.some((g) => g.type === type && appliesTo(g.capability, tool))) continue;
     if (!FAULT_LAYERS[type].includes(cfg.layer)) continue;
     if (type === 'byz' && cfg.profile.name !== 'byzantine') continue;
     if (type === 'falsefail' && cfg.layer === 'service' && !cfg.task.non_idempotent.some((n) => n.tool === tool)) continue;

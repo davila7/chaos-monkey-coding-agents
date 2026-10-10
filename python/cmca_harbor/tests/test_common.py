@@ -47,6 +47,7 @@ RESOLVED = {
         "class_rate_multipliers": {},
     },
     "parity_set": [],
+    "parity_gaps": [],
     "catalog_version": "v1",
     "task": {
         "schema": "tt-task/1",
