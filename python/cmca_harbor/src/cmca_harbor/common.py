@@ -12,6 +12,7 @@ REMOTE_CONFIG = f"{REMOTE_ROOT}/config.json"
 REMOTE_STATE = f"{REMOTE_ROOT}/state"
 REMOTE_LOG_DIR = "/logs/agent/tt"
 REMOTE_LOG = f"{REMOTE_LOG_DIR}/events.jsonl"
+REMOTE_CA = f"{REMOTE_ROOT}/ca.crt"
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 RESOLVED_SCHEMA_PATH = REPO_ROOT / "packages/fault-engine/schemas/tt-engine-1.resolved.schema.json"
@@ -26,6 +27,9 @@ class TtOptions(BaseModel):
     tt_config_dir: str | None = Field(default=None)
     # Host directory with the built injector layout (`bin/`, plugin folders).
     tt_build_dir: str | None = Field(default=None)
+    # Host PEM bundle for hosts whose egress re-terminates TLS (claude.ai cloud
+    # sessions). Node reads it through NODE_EXTRA_CA_CERTS; verification stays on.
+    extra_ca_cert: str | None = Field(default=None)
 
 
 def trial_task_name(logs_dir: Path) -> str:
@@ -110,6 +114,15 @@ class TtAgentMixin:
             command=f"{chown}mkdir -p {REMOTE_STATE} && chmod -R a+rX {REMOTE_ROOT}",
         )
         return {"TT_CONFIG": REMOTE_CONFIG, "TT_STATE": REMOTE_STATE, "TT_LOG": REMOTE_LOG}
+
+    async def _ca_env(self, environment) -> dict[str, str]:
+        """Uploads `extra_ca_cert`, if set, and returns the env that makes Node trust it."""
+        if not self.options.extra_ca_cert:
+            return {}
+        await self.exec_as_root(environment, command=f"mkdir -p {REMOTE_ROOT}")
+        await environment.upload_file(Path(self.options.extra_ca_cert), REMOTE_CA)
+        await self.exec_as_root(environment, command=f"chmod a+r {REMOTE_CA}")
+        return {"NODE_EXTRA_CA_CERTS": REMOTE_CA}
 
     def _tt_metadata(self, context) -> None:
         events = read_events(self.logs_dir)

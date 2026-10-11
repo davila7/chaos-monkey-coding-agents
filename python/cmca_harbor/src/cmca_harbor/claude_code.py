@@ -27,16 +27,19 @@ class ChaosClaudeCode(TtAgentMixin, ClaudeCode):
             return
         await self.ensure_system_dependencies(environment, ("curl", "bash", "nodejs", "npm", "procps"))
         pkg = "@anthropic-ai/claude-code" + (f"@{self._version}" if self._version else "")
-        await self.exec_as_root(environment, command=f"npm install -g {shlex.quote(pkg)} && claude --version")
+        ca = await self._ca_env(environment)
+        with environment.scoped_exec_env(ca):
+            await self.exec_as_root(environment, command=f"npm install -g {shlex.quote(pkg)} && claude --version")
 
     async def run(self, instruction, environment, context) -> None:
         env = await self._tt_prepare(environment)
+        ca = await self._ca_env(environment)
         if env:
             env["CLAUDE_CODE_PLUGIN_DIRS"] = f"{REMOTE_ROOT}/{self.HARNESS_DIR}"
             # The local probe on 2026-10-10 passed this; whether 2.1.x loads
             # function hooks without it is not yet verified (V-01).
             env["CLAUDE_CODE_ENABLE_FUNCTION_HOOKS"] = "1"
-        with environment.scoped_exec_env(env):
+        with environment.scoped_exec_env(env | ca):
             await super().run(instruction, environment, context)
 
     def populate_context_post_run(self, context) -> None:

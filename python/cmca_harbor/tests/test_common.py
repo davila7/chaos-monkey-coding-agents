@@ -124,3 +124,30 @@ def test_opencode_trajectory_keeps_failed_tool_text(tmp_path: Path):
     trajectory = agent._convert_events_to_trajectory(events).to_json_dict()
     results = {r["source_call_id"]: r["content"] for s in trajectory["steps"] for r in ((s.get("observation") or {}).get("results") or [])}
     assert results == {"a": "EACCES: permission denied", "b": "y"}
+
+
+class _RecordingEnv:
+    def __init__(self):
+        self.uploads = []
+
+    async def upload_file(self, src, dst):
+        self.uploads.append((Path(src), dst))
+
+
+def test_extra_ca_cert_is_uploaded_and_exposed_to_node(tmp_path: Path):
+    import asyncio
+
+    pem = tmp_path / "ca.pem"
+    pem.write_text("-----BEGIN CERTIFICATE-----\n")
+    env = _RecordingEnv()
+    agent = ChaosClaudeCode(logs_dir=tmp_path, model_name="m", extra_ca_cert=str(pem))
+    commands = []
+
+    async def fake_root(environment, command, **_):
+        commands.append(command)
+
+    agent.exec_as_root = fake_root
+    assert asyncio.run(agent._ca_env(env)) == {"NODE_EXTRA_CA_CERTS": "/opt/tt/ca.crt"}
+    assert env.uploads == [(pem, "/opt/tt/ca.crt")]
+    assert ChaosClaudeCode(logs_dir=tmp_path, model_name="m").options.extra_ca_cert is None
+    assert asyncio.run(ChaosClaudeCode(logs_dir=tmp_path, model_name="m")._ca_env(env)) == {}
