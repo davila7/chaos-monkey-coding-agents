@@ -23,6 +23,8 @@ CATALOG_PATH = REPO_ROOT / "packages/fault-engine/catalog/v1.json"
 TEXT_TYPES = {"deny", "err", "falsefail"}
 _EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", re.I)
 STATUSES = {"success", "partial", "failure"}
+EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
+ELIGIBLE = ("pass", "apply")
 
 
 def _json(path: Path) -> Any:
@@ -40,14 +42,15 @@ def _text(content: Any) -> str:
     return "\n".join(p.get("text") or "" for p in content if isinstance(p, dict))
 
 
-def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str]]:
-    """(tool name, observation text) for every tool call, in trajectory order."""
+def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any]]]:
+    """(tool name, observation text, arguments) for every tool call, in trajectory order."""
     out = []
     for step in (trajectory or {}).get("steps", []):
         results = {r.get("source_call_id"): r for r in ((step.get("observation") or {}).get("results") or [])}
         for call in step.get("tool_calls") or []:
             r = results.get(call.get("tool_call_id"))
-            out.append((call.get("function_name") or "", _text(r.get("content")) if r else ""))
+            args = call.get("arguments")
+            out.append((call.get("function_name") or "", _text(r.get("content")) if r else "", args if isinstance(args, dict) else {}))
     return out
 
 
@@ -64,24 +67,40 @@ def delivered(fault_type: str, observation: str, payload: str, token: str | None
     return None
 
 
-def join_events(events: list[dict[str, Any]], calls: list[tuple[str, str]]) -> list[tuple[dict[str, Any], str | None]]:
+def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], tuple[Any, ...] | None]]:
+    by_tool: dict[str, list[tuple[Any, ...]]] = {}
+    for c in calls:
+        by_tool.setdefault(c[0], []).append(c)
+    seen: Counter[str] = Counter()
+    out = []
+    for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
+        name = e.get("tool_name") or ""
+        same = by_tool.get(name, [])
+        i = seen[name]
+        seen[name] += 1
+        out.append((e, same[i] if i < len(same) else None))
+    return out
+
+
+def join_events(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], str | None]]:
     """Pairs each record with the observation of its call.
 
     The n-th record for a tool name belongs to the n-th trajectory call of that
     tool: the injector logs every call of a mapped tool, exempt ones included.
     """
-    by_tool: dict[str, list[str]] = {}
-    for name, obs in calls:
-        by_tool.setdefault(name, []).append(obs)
-    seen: Counter[str] = Counter()
-    out = []
-    for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
-        name = e.get("tool_name") or ""
-        obs = by_tool.get(name, [])
-        i = seen[name]
-        seen[name] += 1
-        out.append((e, obs[i] if i < len(obs) else None))
-    return out
+    return [(e, c[1] if c else None) for e, c in _join(events, calls)]
+
+
+def poison_eligible(joined: list[tuple[dict[str, Any], tuple[Any, ...] | None]], decls: list[dict[str, Any]]) -> bool:
+    """Whether any eligible call matched a poison declaration, so a poison fault could have been drawn."""
+    for e, c in joined:
+        if c is None or e.get("decision") not in ELIGIBLE:
+            continue
+        args = c[2] if len(c) > 2 else {}
+        for d in decls:
+            if e.get("capability") == d.get("tool") and all(args.get(k) == v for k, v in (d.get("match") or {}).items()):
+                return True
+    return False
 
 
 def read_status(path: Path) -> str:
@@ -93,19 +112,22 @@ def read_status(path: Path) -> str:
     return "invalid"
 
 
-def load_trial(trial: Path, payloads: dict[str, str], tokens: dict[str, str]) -> dict[str, Any]:
+def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     config = _json(trial / "config.json") or {}
     result = _json(trial / "result.json") or {}
     kwargs = (config.get("agent") or {}).get("kwargs") or {}
     task = Path((config.get("task") or {}).get("path") or trial.name).name
     events_path = trial / "agent/tt/events.jsonl"
     events = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()] if events_path.exists() else []
-    joined = join_events(events, tool_calls(_json(trial / "agent/trajectory.json")))
+    joined_calls = _join(events, tool_calls(_json(trial / "agent/trajectory.json")))
+    joined = [(e, c[1] if c else None) for e, c in joined_calls]
+    decls = poison.get(task, [])
+    token = decls[0]["token"] if decls else None
     faults = []
     for e, obs in joined:
         if e.get("decision") != "apply":
             continue
-        ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), tokens.get(task))
+        ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token)
         faults.append({"type": e["type"], "capability": e["capability"], "payload_id": e.get("payload_id"), "delivered": ok, "joined": obs is not None})
     reward_txt = trial / "verifier/reward.txt"
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
@@ -115,7 +137,6 @@ def load_trial(trial: Path, payloads: dict[str, str], tokens: dict[str, str]) ->
     exc = result.get("exception_info") or {}
     agent = result.get("agent_result") or {}
     verifier_text = "".join(p.read_text(errors="replace") for p in sorted((trial / "verifier").glob("*")) if p.is_file()) if (trial / "verifier").exists() else ""
-    token = tokens.get(task)
     return {
         "trial": trial.name,
         "task": task,
@@ -126,7 +147,9 @@ def load_trial(trial: Path, payloads: dict[str, str], tokens: dict[str, str]) ->
         "cost_usd": agent.get("cost_usd"),
         "input_tokens": agent.get("n_input_tokens"),
         "output_tokens": agent.get("n_output_tokens"),
-        "eligible_calls": sum(1 for e in events if e.get("decision") in ("pass", "apply")),
+        "eligible_calls": sum(1 for e in events if e.get("decision") in ELIGIBLE),
+        "exposure": dict(sorted(Counter(e.get("capability") or "" for e in events if e.get("decision") in ELIGIBLE).items())),
+        "poison_eligible": poison_eligible(joined_calls, decls) if decls else None,
         "faults": faults,
         "status": read_status(trial / "verifier/STATUS.json"),
         "poison_propagated": bool(token) and any(f["type"] == "poison" for f in faults) and token in verifier_text,
@@ -156,6 +179,9 @@ def summarize_profile(trials: list[dict[str, Any]]) -> dict[str, Any]:
         "cost_usd_total": _round(sum(costs)),
         "cost_usd_mean": _round(sum(costs) / len(costs)) if costs else None,
         "eligible_calls_min": min((t["eligible_calls"] for t in trials), default=None),
+        "below_exposure_floor": sum(1 for t in valid if t["eligible_calls"] < EXPOSURE_FLOOR),
+        "exposure": dict(sorted(sum((Counter(t["exposure"]) for t in trials), Counter()).items())),
+        "poison_eligible": sum(1 for t in trials if t["poison_eligible"]),
         "faults_applied": len(faults),
         "faults_by_type": dict(sorted(Counter(f["type"] for f in faults).items())),
         "faults_unjoined": sum(1 for f in faults if not f["joined"]),
@@ -168,23 +194,24 @@ def summarize_profile(trials: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def poison_tokens(dataset: Path | None) -> dict[str, str]:
+def poison_decls(dataset: Path | None) -> dict[str, list[dict[str, Any]]]:
     if dataset is None:
         return {}
     import tomllib
 
     out = {}
     for chaos in sorted(dataset.glob("*/chaos.toml")):
-        for p in tomllib.loads(chaos.read_text()).get("poison", []):
-            out[chaos.parent.name] = p["token"]
+        decls = tomllib.loads(chaos.read_text()).get("poison", [])
+        if decls:
+            out[chaos.parent.name] = decls
     return out
 
 
 def summarize(evidence: Path, dataset: Path | None = None) -> dict[str, Any]:
     payloads = {e["id"]: e.get("text") or "" for e in json.loads(CATALOG_PATH.read_text())}
-    tokens = poison_tokens(dataset)
+    poison = poison_decls(dataset)
     trials = [
-        load_trial(t, payloads, tokens)
+        load_trial(t, payloads, poison)
         for job in sorted(p for p in evidence.iterdir() if p.is_dir())
         for t in sorted(p for p in job.iterdir() if p.is_dir() and (p / "config.json").exists())
     ]

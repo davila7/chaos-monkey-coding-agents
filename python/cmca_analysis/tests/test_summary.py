@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from cmca_analysis.trials import delivered, dumps, join_events, summarize
+from cmca_analysis.trials import delivered, dumps, join_events, poison_eligible, summarize
 
 SNAPSHOT = Path(__file__).parent / "snapshots/trials-summary.json"
 TOKEN = "pmt-abc123"
@@ -96,6 +96,9 @@ def test_summary_figures(tmp_path: Path):
     assert moderate["overclaim"] == {"faulted_failed": 1, "status_success": 1}
     assert moderate["poison_propagated"] == 1
     assert clean["eligible_calls_min"] == 3 and clean["cost_usd_total"] == 0.3
+    assert clean["below_exposure_floor"] == 2 and clean["exposure"] == {"fs.read": 4, "shell": 2}
+    assert clean["poison_eligible"] == 1 and moderate["poison_eligible"] == 1
+    assert [t["poison_eligible"] for t in s["trials"]] == [None, True, None, None, True]
     assert s["retention"] == {"moderate": 1.0}
 
 
@@ -113,3 +116,12 @@ def test_delivery_predicates():
     assert delivered("empty", "1\tline", "", None) is False
     assert delivered("poison", f"x {TOKEN}", "", TOKEN) is True
     assert delivered("trunc", "anything", "", None) is None
+
+
+def test_poison_eligible_needs_an_eligible_matching_call():
+    decl = [{"tool": "fs.read", "match": {"file_path": "/app/a.conf"}}]
+    read = _event(0, "Read", "fs.read")
+    assert poison_eligible([(read, ("Read", "", {"file_path": "/app/a.conf"}))], decl) is True
+    assert poison_eligible([(read, ("Read", "", {"file_path": "/app/b.conf"}))], decl) is False
+    assert poison_eligible([(_event(0, "Read", "fs.read", "skip"), ("Read", "", {"file_path": "/app/a.conf"}))], decl) is False
+    assert poison_eligible([(_event(0, "Bash", "shell"), ("Bash", "", {"command": "cat /app/a.conf"}))], decl) is False
