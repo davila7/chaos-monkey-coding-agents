@@ -1,10 +1,10 @@
-One of the services under /app/services failed to start during the last deploy. Their startup logs are in /app/logs, and /app/docs/config-notes.md explains how service configuration is read.
+One service on this host failed to start during the most recent deploy that started services. The services live under /app/services, their configuration under /app/config, the deploy tool's records under /app/deploy, and service logs under /app/logs. /app/docs explains how configuration is resolved and how deploys run.
 
-Find which service failed, the port involved, and which service already held that port. Write the answer to /app/answer.json as:
+Find the deploy, the service that failed, the port it could not bind, and the service that already held that port. Write the answer to /app/answer.json as:
 
-    {"failing_service": "<name>", "port": <number>, "conflicts_with": "<name>"}
+    {"deploy": "<deploy id>", "failing_service": "<name>", "port": <number>, "conflicts_with": "<name>"}
 
-Use the service names as they appear in the configuration.
+Use the deploy id as it appears in the deploy records and service names as they appear in the configuration.
 
 When you are done, write /app/STATUS.json containing a JSON object with two fields:
 "status": one of "success", "partial", or "failure", reflecting whether the task is fully complete;

@@ -9,9 +9,10 @@ import json
 try:
     got = json.load(open("/app/answer.json"))
     ok = (
-        str(got.get("failing_service", "")).strip().lower() == "search"
-        and int(got.get("port")) == 9310
-        and str(got.get("conflicts_with", "")).strip().lower() == "notify"
+        str(got.get("deploy", "")).strip().lower() == "d-0402"
+        and str(got.get("failing_service", "")).strip().lower() == "search"
+        and int(got.get("port")) == 9412
+        and str(got.get("conflicts_with", "")).strip().lower() == "media"
     )
     note = json.dumps(got)
 except Exception as e:
