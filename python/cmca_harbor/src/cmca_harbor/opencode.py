@@ -29,6 +29,19 @@ class ChaosOpenCode(TtAgentMixin, OpenCode):
         with environment.scoped_exec_env(env):
             await super().run(instruction, environment, context)
 
+    def _convert_events_to_trajectory(self, events):
+        # Harbor records a tool part's `output` only. A failed call, including
+        # one an injector hook failed, carries its text in `error` (V-06).
+        return super()._convert_events_to_trajectory([_error_as_output(e) for e in events])
+
     def populate_context_post_run(self, context) -> None:
         super().populate_context_post_run(context)
         self._tt_metadata(context)
+
+
+def _error_as_output(event):
+    part = event.get("part")
+    state = part.get("state") if isinstance(part, dict) else None
+    if not (isinstance(state, dict) and state.get("status") == "error" and state.get("output") is None):
+        return event
+    return {**event, "part": {**part, "state": {**state, "output": state.get("error", "")}}}

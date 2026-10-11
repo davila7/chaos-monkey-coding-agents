@@ -107,3 +107,20 @@ def test_opencode_adds_the_plugin_only_when_active(tmp_path: Path):
     assert '"file:///opt/tt/oc/index.js"' in command and '"other"' in command
     off = ChaosOpenCode(logs_dir=tmp_path, model_name="anthropic/m")
     assert "plugin" not in (off._build_register_config_command() or "")
+
+
+def test_opencode_trajectory_keeps_failed_tool_text(tmp_path: Path):
+    agent = ChaosOpenCode(logs_dir=tmp_path, model_name="anthropic/m")
+
+    def tool(call_id, state):
+        return {"type": "tool_use", "part": {"type": "tool", "tool": "read", "callID": call_id, "state": state}}
+
+    events = [
+        {"type": "step_start", "timestamp": 1},
+        tool("a", {"status": "error", "input": {"filePath": "/app/x"}, "error": "EACCES: permission denied"}),
+        tool("b", {"status": "completed", "input": {"filePath": "/app/y"}, "output": "y"}),
+        {"type": "step_finish", "part": {}},
+    ]
+    trajectory = agent._convert_events_to_trajectory(events).to_json_dict()
+    results = {r["source_call_id"]: r["content"] for s in trajectory["steps"] for r in ((s.get("observation") or {}).get("results") or [])}
+    assert results == {"a": "EACCES: permission denied", "b": "y"}
