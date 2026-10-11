@@ -13,3 +13,6 @@ export function compact(n: number): string {
 }
 
 export const dollars = (n: number) => (n >= 100 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`);
+
+/** Four decimals: smoke and pilot trials cost cents, which `dollars` would round away. */
+export const usd = (n: number) => `$${n.toFixed(4)}`;
