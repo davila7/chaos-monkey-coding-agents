@@ -1,24 +1,22 @@
-import csv
-from pathlib import Path
-
-from ledger.dates import month_key, parse_date
-from ledger.money import parse_amount
-
-
-def load_entries(path: str | Path) -> list[dict]:
-    with open(path, newline="") as f:
-        rows = list(csv.DictReader(f))
-    return [
-        {"date": parse_date(r["date"]), "description": r["description"], "cents": parse_amount(r["amount"])}
-        for r in rows
-    ]
+from ledger.convert import round_cents, to_base
+from ledger.dates import month_key
+from ledger.money import Money
+from ledger.rates import BASE, Rates
+from ledger.reversals import bookings
+from ledger.statement import Statement
 
 
-def monthly_totals(entries: list[dict]) -> dict[str, int]:
-    """Net cents per month, keys in chronological order."""
-    totals: dict[str, int] = {}
-    for i in range(len(entries) - 1):
-        e = entries[i]
-        key = month_key(e["date"])
-        totals[key] = totals.get(key, 0) + e["cents"]
-    return dict(sorted(totals.items()))
+def build_report(statement: Statement, rates: Rates) -> dict:
+    sums: dict[str, float] = {}
+    for b in bookings(statement.entries):
+        rate = rates.rate(statement.currency, month_key(b.rate_date))
+        key = month_key(b.entry.date)
+        sums[key] = sums.get(key, 0) + to_base(Money(b.entry.cents, statement.currency), rate)
+    months = {key: round_cents(value) for key, value in sorted(sums.items())}
+    return {
+        "account": statement.account,
+        "currency": statement.currency,
+        "base": BASE,
+        "months": months,
+        "total": sum(months.values()),
+    }

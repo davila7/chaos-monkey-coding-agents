@@ -21,8 +21,8 @@ def test_plan_writes_one_config_per_profile_and_task(tmp_path: Path):
     caps = json.loads((REPO_ROOT / "capabilities/claude-code@2.1.289.json").read_text())
     assert cfg["parity_set"] == caps["parity_set"]
     assert {(g["type"], g["capability"]) for g in cfg["parity_gaps"]} == {("empty", "fs.write"), ("empty", "fs.edit")}
-    assert cfg["task"]["poison"][0]["match"] == {"file_path": "/app/services/notify/service.conf"}
-    assert "pmt-3b7d20" in cfg["variants"]["variants/notify-service.conf"]
+    assert cfg["task"]["poison"][0]["match"] == {"file_path": "/app/config/environments/prod-b.conf"}
+    assert "rg-5d81f0" in cfg["variants"]["variants/prod-b.conf"]
     assert cfg["task"]["exposure"]["expected_classes"]
     clean = json.loads((tmp_path / "out/clean/n-port-conflict.json").read_text())
     assert clean["profile"]["base_rate"] == 0
