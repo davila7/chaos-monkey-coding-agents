@@ -1,4 +1,4 @@
-One service on this host failed to start during the most recent deploy that started services. The services live under /app/services, their configuration under /app/config, the deploy tool's records under /app/deploy, and service logs under /app/logs. /app/docs explains how configuration is resolved and how deploys run.
+One service on this host failed to start during the most recent deploy that started services on it. The services live under /app/services, their configuration under /app/config with its history under /app/config-history, the deploy tool's records under /app/deploy, this host's service logs under /app/logs, and host tools under /app/bin. /app/docs explains how configuration is resolved, how deploys run, and how to look up the host's runtime state.
 
 Find the deploy, the service that failed, the port it could not bind, and the service that already held that port. Write the answer to /app/answer.json as:
 
