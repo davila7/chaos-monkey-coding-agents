@@ -22,7 +22,10 @@ export default function Home() {
 
       <main className="wrap">
         <header className="hero">
-          <img className="banner" src="/banner.png" alt="Chaos Monkey: Coding Agent Benchmark" width={2172} height={724} />
+          <div className="banner" role="img" aria-label="Chaos Monkey: Coding Agent Benchmark">
+            <img className="mark" src="/monkey.svg" alt="" width={700} height={724} />
+            <img className="title" src="/banner-text.png" alt="" width={1472} height={724} />
+          </div>
           <p className="lede">
             Seeded tool-call failures injected into unmodified coding-agent harnesses. Which harness still finishes the task,
             what recovery costs, and whether it reports the outcome honestly.
