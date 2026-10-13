@@ -20,17 +20,14 @@ def build_matrix(statements, table: RateTable, kinds: tuple[str, ...] | None = N
     journal = Journal.from_statements(statements, table)
     months = fill_gaps(journal.periods())
     rows: dict[str, dict] = {}
-    for p in journal.postings:
-        acct = account(p.account)
+    for (code, period), cents in journal.cells().items():
+        acct = account(code)
         if kinds is not None and acct.kind not in kinds:
             continue
-        if p.account not in rows:
-            rows[p.account] = {"name": acct.name, "kind": acct.kind, "months": {}, "total": 0}
-        row = rows[p.account]
-        row["months"][p.period] = row["months"].get(p.period, 0) + p.cents
-        row["total"] += p.cents
-    for row in rows.values():
-        row["months"] = dict(sorted(row["months"].items()))
+        if code not in rows:
+            rows[code] = {"name": acct.name, "kind": acct.kind, "months": {}, "total": 0}
+        rows[code]["months"][period] = cents
+        rows[code]["total"] += cents
     totals = {m: sum(r["months"].get(m, 0) for r in rows.values()) for m in months}
     return {
         "base": BASE_CURRENCY,
