@@ -441,7 +441,7 @@ Consequences: the SVG is 89 KB (12 KB gzipped) and loads as an `<img>`, so it ru
 ## D-0026 Harder Track N tasks: rules in the docs, instances in the data
 
 - Date: 2026-10-13
-- Status: Proposed (the owner chose "redesign and measure" on 2026-10-13 after the D-0024 pilot; plan under CLAUDE.md rule 1, and the pilot in item 6 needs the owner's approval of its cost estimate)
+- Status: Accepted (the owner merged PR #28 on 2026-10-13; the pilot in item 6 still needs the owner's approval of its cost estimate)
 
 Context: the D-0024 clean pilot (`results/pilot/2026-10-13-cc-claude-clean-large/`, PR #26) passed 6 of 6 for $1.4369. Eligible calls per trial: `n-ledger-fix` 16 and 14, `n-port-conflict` 10 and 11, `n-shipments-summary` 7 and 5 (below the floor of 8). Exposure was 61 shell and 2 `fs.read` calls. The trajectories show one cause across the three tasks: the docs name every trap instance, so the agent reads the docs once and executes a known plan.
 - `n-shipments-summary`: the agent read all docs in one call, looked at a few file heads, wrote `summarize.py` in one call and stopped. In attempt 1 it never ran the checker.
