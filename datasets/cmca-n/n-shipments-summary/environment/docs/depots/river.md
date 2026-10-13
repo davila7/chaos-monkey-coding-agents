@@ -1,14 +1,11 @@
 # river
 
-Tab-separated text with a header row.
+Family: delimited text, tab-separated.
 
-- Directives in `#` comment lines: `# seq: N`, `# date format: MM/DD/YYYY` or
-  `# date format: DD/MM/YYYY`, and `# weight unit: g|kg`. The date format can be
-  changed part way through a file by another date format directive; it applies
-  to the rows after it.
+- Directives: `# seq: N`, `# date format: <form>` and `# weight unit: <unit>`.
+  Base date form: `MM/DD/YYYY`.
 - Columns: `t` (empty for a new record, `C` correction, `V` void), `ref` (for
   example `SH/123456`), `shipped`, `weight`, `status`.
+- Weights use a dot as the decimal separator.
 - Status values: `delivered`, `delivered-late`, `cancelled`, `returned`, `held`.
 - The last line is a `# N records` comment.
-- River's newer export stations write UTF-16 with a byte order mark; older ones
-  write UTF-8.
