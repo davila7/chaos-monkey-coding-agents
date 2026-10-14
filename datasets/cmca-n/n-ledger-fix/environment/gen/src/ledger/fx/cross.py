@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from ledger import BASE_CURRENCY
 from ledger.core import currency as _currency
-from ledger.core.rounding import round_half_away, round_to
+from ledger.core.rounding import round_half_away
 from ledger.fx.lookup import rate_for
 from ledger.fx.table import RateTable
 
@@ -22,7 +22,7 @@ def cross_rate(table: RateTable, source: str, target: str, month: str) -> Decima
         return Decimal(1)
     a = rate_for(table, source, month)
     b = rate_for(table, target, month)
-    return round_to(a / b, CROSS_PLACES)
+    return (a / b).quantize(Decimal(1).scaleb(-CROSS_PLACES))
 
 
 def convert_between(minor: int, source: str, target: str, table: RateTable, month: str) -> int:

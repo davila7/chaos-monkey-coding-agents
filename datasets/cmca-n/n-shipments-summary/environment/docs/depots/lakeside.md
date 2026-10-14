@@ -1,16 +1,12 @@
 # lakeside
 
-Comma-separated values with a header row.
+Family: delimited text, comma-separated with CSV quoting.
 
-- Directives in `#` comment lines: `# seq: N` and `# dates: iso|serial`. ISO
-  dates look like `2026-03-04`. Serial dates are day numbers counted the way
-  spreadsheets do: day 1 is 1899-12-31, so 46085 is 2026-03-04. A dates
-  directive applies to the rows after it.
+- Directives: `# seq: N` and `# dates: <form>`. Base date form: `iso`.
 - Columns: `id` (for example `sh123456`), `kind` (empty for a new record, `corr`
   or `void`), `booked` (booking date), `shipped` (ship date), `gross_kg`,
-  `net_kg`, `status`. The shipment weight is `gross_kg`, in kilograms.
-- When the export tool's column set changes during a run, it writes a
-  `# columns changed` comment followed by a new header row; the rows after it
-  follow the new header.
+  `net_kg`, `status`. The shipment weight is `gross_kg`; `net_kg` is not used.
+  Both dates follow the date directive in force.
+- Weights use a dot as the decimal separator.
 - Status values are lower case with hyphens: `delivered`, `delivered-late`,
   `cancelled`, `returned`, `held`.

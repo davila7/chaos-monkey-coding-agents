@@ -7,7 +7,7 @@ Usage:
 Endpoints (JSON):
     GET /v1/hosts
     GET /v1/hosts/<host>/runs/<deploy>
-    GET /v1/hosts/<host>/ports/<port>[?after=<deploy>]
+    GET /v1/hosts/<host>/ports/<port>/events?from=<time>&to=<time>[&page=<n>]
     GET /v1/hosts/<host>/procs/<pid>
 """
 import argparse
@@ -18,9 +18,12 @@ import sys
 import time
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
 
 STATE_FILE = "/app/var/statusd/state.bin"
+PAGE_SIZE = 4
+MAX_WINDOW = timedelta(hours=72)
 
 
 def keystream(n: int) -> bytearray:
@@ -36,6 +39,20 @@ def load_state(path: str) -> dict:
     raw = open(path, "rb").read()
     plain = bytes(a ^ b for a, b in zip(raw, keystream(len(raw))))
     return json.loads(zlib.decompress(plain))
+
+
+def parse_time(text):
+    try:
+        when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(f"cannot parse time {text!r}; use ISO 8601, for example 2026-01-31T13:05:00Z")
+    if when.tzinfo is None:
+        raise ValueError(f"time {text!r} has no UTC offset; add Z or an offset such as +01:00")
+    return when.astimezone(timezone.utc)
+
+
+def fmt_time(when):
+    return when.strftime("%Y-%m-%dT%H:%M:%S") + f".{when.microsecond // 1000:03d}Z"
 
 
 class Store:
@@ -58,31 +75,38 @@ class Store:
                     "requested_rev": r["requested"],
                     "loaded_rev": r["loaded"],
                     "note": r["note"],
+                    "started_at": r["started_at"],
+                    "finished_at": r["finished_at"],
+                    "failed_pids": r["failed_pids"],
                 }
         raise LookupError(
-            f"no run of {deploy} recorded on {host}; dry runs and runs that did not target {host} are not recorded"
+            f"no run of {deploy} recorded on {host}; dry runs and runs that did not reach {host} are not recorded"
         )
 
-    def port(self, host, port, after):
+    def port_events(self, host, port, start, end, page):
         h = self.host(host)
-        runs = h["runs"]
-        if not runs:
-            raise LookupError(f"no runs recorded on {host}")
-        if after is None:
-            run = runs[-1]
-        else:
-            match = [r for r in runs if r["deploy"] == after]
-            if not match:
-                raise LookupError(f"no run of {after} recorded on {host}")
-            run = match[0]
-        pid = run["ports"].get(str(port))
-        out = {"host": host, "port": port, "after": run["deploy"]}
-        if pid is None:
-            out["state"] = "free"
-        else:
-            out["state"] = "listening"
-            out["pid"] = pid
-        return out
+        if start is None or end is None:
+            raise ValueError("from and to are required")
+        t0, t1 = parse_time(start), parse_time(end)
+        if t1 <= t0:
+            raise ValueError("to must be later than from")
+        if t1 - t0 > MAX_WINDOW:
+            raise ValueError("the window from..to may span at most 72 hours")
+        lo, hi = fmt_time(t0), fmt_time(t1)
+        hits = [e for e in h["ports"].get(str(port), []) if lo <= e[0] < hi]
+        pages = max(1, -(-len(hits) // PAGE_SIZE))
+        if page < 1 or page > pages:
+            raise ValueError(f"page must be between 1 and {pages}")
+        chunk = hits[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
+        return {
+            "host": host,
+            "port": port,
+            "from": lo,
+            "to": hi,
+            "page": page,
+            "pages": pages,
+            "events": [{"at": at, "event": kind, "pid": pid} for at, kind, pid in chunk],
+        }
 
     def proc(self, host, pid):
         p = self.host(host)["procs"].get(str(pid))
@@ -111,20 +135,26 @@ def make_handler(store: Store):
             try:
                 if parts == ["v1", "hosts"]:
                     return self.reply(200, {"hosts": sorted(store.hosts)})
+                if len(parts) == 6 and parts[:2] == ["v1", "hosts"] and parts[3] == "ports" and parts[5] == "events":
+                    page = query.get("page", ["1"])[0]
+                    if not page.isdigit():
+                        raise ValueError("page must be a positive integer")
+                    return self.reply(200, store.port_events(
+                        parts[2], int(parts[4]), query.get("from", [None])[0], query.get("to", [None])[0], int(page)))
                 if len(parts) == 5 and parts[:2] == ["v1", "hosts"]:
                     host, kind, key = parts[2], parts[3], parts[4]
                     if kind == "runs":
                         return self.reply(200, store.run(host, key))
-                    if kind == "ports":
-                        after = query.get("after", [None])[0]
-                        return self.reply(200, store.port(host, int(key), after))
                     if kind == "procs":
                         return self.reply(200, store.proc(host, int(key)))
                 return self.reply(404, {"error": f"no such endpoint {url.path}"})
             except LookupError as e:
                 return self.reply(404, {"error": str(e.args[0])})
-            except ValueError:
-                return self.reply(400, {"error": "port and pid must be integers"})
+            except ValueError as e:
+                msg = str(e.args[0]) if e.args else ""
+                if msg.startswith("invalid literal"):
+                    msg = "port and pid must be integers"
+                return self.reply(400, {"error": msg})
 
     return Handler
 

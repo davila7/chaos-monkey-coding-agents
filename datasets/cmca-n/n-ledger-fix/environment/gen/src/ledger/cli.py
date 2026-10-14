@@ -5,6 +5,8 @@ Commands:
   vat STATEMENT        tax summary
   balances STATEMENT   running balances
   summary STATEMENT    fiscal quarter and year totals
+  quarterly STATEMENT  totals, averages and entry counts by fiscal quarter
+  pack STATEMENT       monthly, balance, quarter and tax tables on one HTML page
   trial STATEMENT...   trial balance across statements
   check STATEMENT...   parse statements and report the first problem in each
                        (--guess also compares each file with the layout it is read with)
@@ -41,14 +43,14 @@ from ledger.fx.lookup import choose_rate
 from ledger.fx.ratefile import load_rates
 from ledger.parse import dialects as _dialects
 from ledger.parse.statement import read_statement
-from ledger.render import csvout, jsonout, markdown, text
+from ledger.render import csvout, html, jsonout, markdown, text
 from ledger.report.balances import build_balances
 from ledger.report.monthly import build_monthly, entry_lines
 from ledger.report.summary import build_summary
 from ledger.report.trial import build_trial
 from ledger.report.vat import build_vat
 
-FORMATS = ("text", "csv", "markdown", "json")
+FORMATS = ("text", "csv", "markdown", "html", "json")
 RATES_ENV = "LEDGER_RATES"
 RATES_FALLBACK = Path("data") / "rates.csv"
 
@@ -61,7 +63,7 @@ def rates_path(arg: str | None) -> Path:
 
 
 def _renderer(fmt: str, kind: str):
-    module = {"text": text, "csv": csvout, "markdown": markdown}.get(fmt)
+    module = {"text": text, "csv": csvout, "markdown": markdown, "html": html}.get(fmt)
     if fmt == "json":
         return jsonout.render
     fn = getattr(module, f"render_{kind}", None)
@@ -73,7 +75,7 @@ def _renderer(fmt: str, kind: str):
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ledger", description="Multi-currency statement ledger")
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("report", "vat", "balances", "summary"):
+    for name in ("report", "vat", "balances", "summary", "quarterly"):
         sp = sub.add_parser(name)
         sp.add_argument("statement")
         sp.add_argument("--rates")
@@ -92,6 +94,12 @@ def _parser() -> argparse.ArgumentParser:
         sp = sub.add_parser(name)
         sp.add_argument("statements", nargs="+")
         sp.add_argument("--rates")
+        if name in ("matrix", "return"):
+            sp.add_argument("--format", choices=("json", "text", "html"))
+    sp = sub.add_parser("pack")
+    sp.add_argument("statement")
+    sp.add_argument("--rates")
+    sp.add_argument("--opening", type=int)
     sp = sub.add_parser("explain")
     sp.add_argument("statement")
     sp.add_argument("entry")
@@ -148,6 +156,10 @@ def _cmd_single(args) -> str:
         return _renderer(fmt, "vat")(build_vat(st, table))
     if args.command == "balances":
         return _renderer(fmt, "balances")(build_balances(monthly))
+    if args.command == "quarterly":
+        from ledger.report.quarterly import build_quarterly
+
+        return _renderer(fmt, "quarterly")(build_quarterly(st, table))
     return _renderer(fmt, "summary")(build_summary(monthly, st.fiscal_start))
 
 
@@ -252,6 +264,10 @@ def _cmd_more(args) -> str:
             return "\n".join(explain_entry(read_statement(args.statement), table, args.entry)) + "\n"
         except KeyError:
             raise LedgerError(f"no entry {args.entry} in {args.statement}") from None
+    if args.command == "pack":
+        from ledger.report.pack import build_pack, render_pack
+
+        return render_pack(build_pack(read_statement(args.statement), table, args.opening or 0))
     if args.command == "revalue":
         from ledger.fx.revalue import revalue
 
@@ -259,12 +275,19 @@ def _cmd_more(args) -> str:
     if args.command == "rates":
         return "".join(s.describe() + "\n" for s in all_stats(table))
     sts = [read_statement(p) for p in sorted(args.statements)]
+    fmt = getattr(args, "format", None) or "json"
     if args.command == "matrix":
-        return jsonout.render(build_matrix(sts, table))
+        matrix = build_matrix(sts, table)
+        return {"json": jsonout.render, "text": text.render_matrix, "html": html.render_matrix}[fmt](matrix)
     if args.command == "transfers":
         return "".join(t.describe() + "\n" for t in find_transfers(sts, table))
     if args.command == "return":
-        return jsonout.render(build_return(sts, table))
+        from ledger.tax.returns import render_return
+
+        ret = build_return(sts, table)
+        if fmt == "html":
+            raise LedgerError("the html format has no return view")
+        return render_return(ret) if fmt == "text" else jsonout.render(ret)
     if args.command == "export":
         return export(sts, table)
     rows = compare_budget(build_matrix(sts, table), load_budget(args.budget))
@@ -295,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
             output = _cmd_rate(args)
         elif args.command == "dialects":
             output = _cmd_dialects(args)
-        elif args.command in ("audit", "suggest", "aging", "rates", "matrix", "transfers", "return", "export", "budget", "overview", "revalue", "explain", "validate", "schedule", "diff", "outlook"):
+        elif args.command in ("audit", "suggest", "aging", "rates", "matrix", "transfers", "return", "export", "budget", "overview", "revalue", "pack", "explain", "validate", "schedule", "diff", "outlook"):
             output = _cmd_more(args)
         else:
             output = _cmd_single(args)

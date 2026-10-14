@@ -42,20 +42,15 @@ it. It must finish within a few minutes on an export set of this size.
 
 ## Export files
 
-- Every regular file in `DATA_DIR` is one export. Files ending in `.gz` are
-  gzip-compressed exports; decompress them and read them like the others.
-- The depot is the part of the file name before the first hyphen
-  (`east-w12.csv` and `east-w3r.csv.gz` are both east exports). The rest of the
-  name is a label for people and says nothing reliable about order. Each export
-  states its sequence number inside the file; see `corrections.md`.
-- Each depot has its own format, described in `depots/<depot>.md`. Files of the
-  same depot can differ from each other, and conventions can change part way
-  through a file. What a file declares about itself (directives, header rows,
-  attributes, layout lines) applies from the point where it appears and wins
-  over the depot notes, which describe the usual case.
-- Text is UTF-8 unless the file starts with a byte order mark or declares
-  another character set. Comment lines, directives, column headers, page
-  headers, totals and trailer lines are not records.
+- Every regular file in `DATA_DIR` is one export. The depot is the part of the
+  file name before the first hyphen. The rest of the name is a label for people
+  and says nothing reliable about order or format. Each export states its
+  sequence number inside the file; see `corrections.md`.
+- Each depot writes one base format, described in `depots/<depot>.md`. The
+  conventions in `exports.md` apply to every depot whose format they fit: any
+  export of any depot can use them, at the top of a file or part way through.
+  The depot notes describe the base format only; they do not say which exports
+  use which convention.
 
 ## Records
 

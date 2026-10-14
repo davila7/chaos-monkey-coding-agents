@@ -1,12 +1,8 @@
 # west
 
-Semicolon-separated text with a header row.
+Family: delimited text, semicolon-separated.
 
-- Directives in `#` comment lines: `# seq: N` and
-  `# weight unit: <unit> (decimal comma)`. West has exported in pounds for a
-  long time, but the unit line of each file is what counts.
-- Some exports come from an older office system and declare
-  `# charset: windows-1252`.
+- Directives: `# seq: N` and `# weight unit: <unit> (decimal comma)`.
 - Columns: `id` (for example `SH123456`), `typ` (`N`, `C` or `V`), `shipped` as
   `DD.MM.YYYY`, `weight`, `status`, `note`.
 - Weights use a comma as the decimal separator and a dot to group thousands:

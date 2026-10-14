@@ -24,11 +24,17 @@ HOST_ENV = "prod-b"
 UTC = timezone.utc
 
 # Planned outcome; the replay below must reproduce exactly this.
-EXPECT_DEPLOY = "d-1194"
+EXPECT_DEPLOY = "d-1197"
 EXPECT_FAILURES = [
     ("geo", "admin", 9512, "ingest"),
-    ("tagging", "admin", 9446, "recommend"),
+    ("tagging", "admin", 9446, "transcode"),
 ]
+# The cancelled run that never reached HOST; its one failure is on another host.
+EXPECT_CANCELLED = "d-1198"
+EXPECT_OTHER_FAILURES = {"app-06": [("d-1198", "inventory", "admin", 9828, "inventory")]}
+# (host, planned run, service): seconds the old process keeps its admin listener after stop.
+SLOW_CLOSE = {("app-07", "target", "notify"): 3.5, ("app-06", "cancel", "inventory"): 12.0}
+RETRIES, RETRY_GAP_S = 3, 2
 
 SERVICES = [
     ("gateway", "edge", 10, "public HTTP entry point"),
@@ -73,6 +79,7 @@ SERVICES = [
     ("ledger-close", "batch", 20, "daily ledger close"),
 ]
 SVC_NAMES = sorted(s[0] for s in SERVICES)
+PLANNED_SVCS = ("tagging", "recommend", "geo", "ingest", "ratings", "transcode", "inventory", "notify")
 SVC_PROFILE = {s[0]: s[1] for s in SERVICES}
 SVC_OFFSET = {s[0]: s[2] for s in SERVICES}
 SVC_DESC = {s[0]: s[3] for s in SERVICES}
@@ -237,7 +244,7 @@ def base_config(rng, safe):
         sections = [[s, section_lines(rng, s, 28, 41)] for s in order]
         conf = Conf(header, top, sections)
         for s in rng.sample(SVC_NAMES, 3):
-            if s in ("tagging", "recommend", "geo", "ingest", "ratings"):
+            if s in PLANNED_SVCS:
                 continue
             if rng.random() < 0.5:
                 conf.set_key(s, "port_offset", safe.next_offset(SVC_PROFILE[s]))
@@ -259,7 +266,7 @@ def base_config(rng, safe):
         top = [f"rack = r{rng.randint(1, 40):02d}", f"zone = {REGIONS[HOST_ENVS[h]]}-{rng.choice('abc')}",
                f"nic = ens{rng.choice([3, 4, 5, 6])}"]
         sections = [[s, section_lines(rng, s, 1, 4)] for s in rng.sample(SVC_NAMES, rng.randint(2, 5))
-                    if s not in ("tagging", "recommend", "geo", "ingest")]
+                    if s not in PLANNED_SVCS]
         conf = Conf(header, top, sections)
         if h != HOST and rng.random() < 0.3:
             s = rng.choice([x for x, _ in sections] or ["search"])
@@ -284,7 +291,7 @@ def base_config(rng, safe):
         ["# Canary listener for search."], [], [["search", ["port_offset = 44"]]])
     cfg["overrides/app-07-profiler.conf"] = Conf(
         ["# Profiler sidecar layout for app-07, first draft."], [],
-        [["recommend", ["port_offset = 31"]], ["tagging", ["admin_port = 9447"]]])
+        [["recommend", ["port_offset = 46"]], ["tagging", ["admin_port = 9447"]]])
     cfg["overrides/maintenance.conf"] = Conf(
         ["# Maintenance window settings."], ["drain_s = 120"],
         [["ingest", ["port_offset = 46"]], ["thumbnail", ["enabled = false"]]])
@@ -373,7 +380,7 @@ def t(s):
 REV_FIRST, REV_LAST = 380, 419
 PLANNED_REV_DATES = {
     405: "2026-03-01T06:10:00+00:00", 406: "2026-03-01T15:20:00+00:00",
-    412: "2026-03-09T11:00:00+00:00",
+    412: "2026-03-09T11:00:00+00:00", 413: "2026-03-10T09:00:00+00:00",
     417: "2026-03-20T14:30:00+00:00", 418: "2026-03-20T21:05:00+00:00", 419: "2026-03-23T09:40:00+00:00",
 }
 LOG_START = t("2026-02-14T00:00:00+00:00")
@@ -402,7 +409,7 @@ def fmt_local(when, op):
 def rev_dates(rng):
     dates = {REV_FIRST: t("2026-02-01T09:00:00+00:00")}
     segments = [(381, 404, "2026-02-03", "2026-02-28"), (407, 411, "2026-03-02", "2026-03-08"),
-                (413, 416, "2026-03-10", "2026-03-18")]
+                (414, 416, "2026-03-11", "2026-03-18")]
     for lo, hi, d0, d1 in segments:
         a, b = t(d0 + "T08:00:00+00:00"), t(d1 + "T08:00:00+00:00")
         n = hi - lo + 1
@@ -433,11 +440,13 @@ def build_records(rng, dates):
         ("2026-03-01T09:30", "app-07", "ops-rota"), ("2026-03-04T11:10", "all", "ci-nyc"),
         ("2026-03-07T08:45", "app-07,app-08", "ops-rota"), ("2026-03-10T14:05", "all", "release-bot"),
         ("2026-03-13T09:20", "app-05,app-06,app-07", "ops-apac"), ("2026-03-16T23:35", "all", "ci-nyc"),
-        ("2026-03-18T10:00", "app-07", "ops-rota"),
+        ("2026-03-18T10:00", "app-07", "ops-rota"), ("2026-03-19T16:25", "app-07,app-08", "release-bot"),
+        ("2026-03-20T09:10", "app-07", "ops-rota"),
     ]
     for when, hosts, op in app07_applies:
         add(t(when + ":00+00:00"), "apply", "prod-b", hosts, op)
     add(t("2026-03-21T02:40:00+00:00"), "apply", "prod-b", "all", "ci-nyc", target=True)
+    add(t("2026-03-21T03:35:00+00:00"), "apply", "prod-b", "app-06,app-07", "ops-apac", cancel=True)
     add(t("2026-03-21T10:00:00+00:00"), "apply", "prod-a", "all", "ops-rota")
     add(t("2026-03-22T06:00:00+00:00"), "dry-run", "prod-b", "app-07", "ops-rota")
     add(t("2026-03-22T14:15:00+00:00"), "apply", "prod-c", "all", "ci-nyc")
@@ -479,7 +488,7 @@ def build_records(rng, dates):
 
 
 def render_record(r):
-    return "\n".join([
+    lines = [
         f"id = {r['id']}",
         f"started_at = {fmt_local(r['when'], r['op'])}",
         f"mode = {r['mode']}",
@@ -488,10 +497,19 @@ def render_record(r):
         f"config_rev = {r['rev']}",
         f"release = {r['release']}",
         f"requested_by = {r['op']}",
-    ]) + "\n"
+    ]
+    if r["mode"] == "apply":
+        lines.append(f"failed_starts = {r['failed_starts']}")
+    if "cancelled_at" in r:
+        lines.append(f"cancelled_at = {fmt_local(r['cancelled_at'], r['op'])}")
+    return "\n".join(lines) + "\n"
 
 
 # ------------------------------------------------------------------ replay
+
+
+def iso_ms(when):
+    return when.strftime("%Y-%m-%dT%H:%M:%S") + f".{when.microsecond // 1000:03d}Z"
 
 
 def replay(rng, recs, snapshots, svc_files):
@@ -505,32 +523,51 @@ def replay(rng, recs, snapshots, svc_files):
         return files_cache[rev]
 
     pid_counter = [2400]
-    hosts = {h: {"runs": [], "procs": {}} for h in ALL_HOSTS}
+    hosts = {h: {"runs": [], "procs": {}, "ports": {}} for h in ALL_HOSTS}
     events = []
     failures = {h: [] for h in ALL_HOSTS}
     running = {h: {} for h in ALL_HOSTS}
+    # port -> (service, pid, release time while the old process is still closing, else None)
     holders = {h: {} for h in ALL_HOSTS}
     intervals = {s: [] for s in SVC_NAMES}
+
+    def port_event(h, port, when, kind, pid):
+        log = hosts[h]["ports"]
+        if str(port) not in log:
+            log[str(port)] = []
+        log[str(port)].append([iso_ms(when), kind, pid])
 
     for r in recs:
         if r["mode"] != "apply":
             continue
-        for h in r["host_list"]:
+        r["failed_starts"] = 0
+        now = r["when"] + timedelta(seconds=rng.randint(40, 75))
+        reached = r["host_list"][:1] if r.get("cancel") else r["host_list"]
+        for h in reached:
             env = HOST_ENVS[h]
             loaded, note = r["rev"], ""
             if h == HOST and r.get("target"):
                 loaded = r["rev"] - 1
                 note = f"fetch of r{r['rev']:04d} failed (checksum mismatch); continued with r{loaded:04d}"
             files = files_at(loaded)
-            now = r["when"] + timedelta(seconds=rng.randint(40, 75))
+            host_start, failed_pids = now, []
             for svc in SVC_NAMES:
                 cfg = resolve(files, env, h, svc)
                 old = running[h].pop(svc, None)
                 if old:
                     pid, ports, since = old
-                    for p in ports:
-                        del holders[h][p]
-                    hosts[h]["procs"][str(pid)]["exited_at"] = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    slow = SLOW_CLOSE.get((h, "target" if r.get("target") else "cancel" if r.get("cancel") else "", svc))
+                    exit_at = now
+                    for lname, p in ports:
+                        if slow and lname == "admin":
+                            rel = now + timedelta(seconds=slow)
+                            holders[h][p] = (svc, pid, rel)
+                            port_event(h, p, rel, "release", pid)
+                            exit_at = rel
+                        else:
+                            del holders[h][p]
+                            port_event(h, p, now, "release", pid)
+                    hosts[h]["procs"][str(pid)].update(exited_at=iso_ms(exit_at), exit_status=0)
                     if h == HOST:
                         events.append((now, svc, "INFO", "shutdown requested by deploy agent"))
                         events.append((now + timedelta(milliseconds=rng.randint(300, 900)), svc, "INFO",
@@ -545,7 +582,7 @@ def replay(rng, recs, snapshots, svc_files):
                 pid = pid_counter[0]
                 hosts[h]["procs"][str(pid)] = {
                     "cmd": f"/opt/svc/{svc}/bin/serve --conf /app/services/{svc}/service.conf --env {env}",
-                    "started_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "exited_at": None}
+                    "started_at": iso_ms(now), "exited_at": None, "exit_status": None}
                 ev = []
                 ev.append((now, "INFO", f"starting pid={pid} conf=/app/services/{svc}/service.conf"))
                 ev.append((now + timedelta(milliseconds=rng.randint(80, 300)), "INFO", f"environment {env}"))
@@ -553,24 +590,42 @@ def replay(rng, recs, snapshots, svc_files):
                 opened, failed = [], None
                 for lname in ("main", "admin"):
                     port = cfg[lname]
-                    if port in holders[h]:
-                        failed = (lname, port, holders[h][port][0])
+                    attempt = 0
+                    while True:
+                        hold = holders[h].get(port)
+                        if hold and hold[2] is not None and hold[2] <= step:
+                            del holders[h][port]
+                            hold = None
+                        if hold is None:
+                            break
+                        if hold[0] == svc and hold[2] is not None and attempt < RETRIES:
+                            attempt += 1
+                            ev.append((step, "WARN", f"listener {lname}: bind failed: address already in use; "
+                                                     f"retry {attempt}/{RETRIES} in {RETRY_GAP_S}s"))
+                            step += timedelta(seconds=RETRY_GAP_S)
+                            continue
+                        failed = (lname, port, hold[0])
+                        break
+                    if failed:
                         ev.append((step, "ERROR", f"listener {lname}: bind failed: address already in use"))
                         ev.append((step + timedelta(milliseconds=12), "ERROR", "startup aborted; closing open listeners"))
                         ev.append((step + timedelta(milliseconds=40), "INFO", "exited status=1"))
                         break
-                    if h == HOST and svc == "notify" and lname == "admin" and r.get("target"):
-                        ev.append((step, "WARN", "listener admin: bind failed: address already in use; retry 1/3 in 2s"))
-                        step += timedelta(seconds=2)
-                    holders[h][port] = (svc, pid)
-                    opened.append(port)
+                    holders[h][port] = (svc, pid, None)
+                    port_event(h, port, step, "bind", pid)
+                    opened.append((lname, port))
                     ev.append((step, "INFO", f"listener {lname} ready"))
                     step += timedelta(milliseconds=rng.randint(30, 200))
                 if failed:
-                    for p in opened:
+                    closed = step + timedelta(milliseconds=12)
+                    for _, p in opened:
                         del holders[h][p]
-                    hosts[h]["procs"][str(pid)]["exited_at"] = step.strftime("%Y-%m-%dT%H:%M:%SZ")
+                        port_event(h, p, closed, "release", pid)
+                    hosts[h]["procs"][str(pid)].update(exited_at=iso_ms(step + timedelta(milliseconds=40)),
+                                                       exit_status=1)
                     failures[h].append((r["id"], svc) + failed)
+                    failed_pids.append(pid)
+                    r["failed_starts"] += 1
                 else:
                     running[h][svc] = (pid, opened, step)
                     ev.append((step + timedelta(milliseconds=rng.randint(100, 900)), "INFO",
@@ -580,7 +635,13 @@ def replay(rng, recs, snapshots, svc_files):
                 now = step + timedelta(seconds=rng.randint(1, 3))
             hosts[h]["runs"].append({
                 "deploy": r["id"], "requested": r["rev"], "loaded": loaded, "note": note,
-                "ports": {str(p): v[1] for p, v in sorted(holders[h].items())}})
+                "started_at": iso_ms(host_start), "finished_at": iso_ms(now), "failed_pids": failed_pids})
+            now += timedelta(seconds=rng.randint(5, 20))
+        if r.get("cancel"):
+            r["cancelled_at"] = now + timedelta(seconds=rng.randint(10, 40))
+    for h in ALL_HOSTS:
+        for evs in hosts[h]["ports"].values():
+            evs.sort()
     for svc, (pid, ports, since) in running[HOST].items():
         intervals[svc].append((since, LOG_END + timedelta(days=1)))
     return hosts, events, failures, intervals
@@ -688,11 +749,18 @@ def main(out_dir):
             summaries.append("prod-b listener layout update")
         elif rev == 412:
             cfg["hosts/app-07.conf"].sections.append(
-                ["recommend", ["# r0412: profiler sidecar on this host needs the usual listener", "port_offset = 46"]])
+                ["recommend", ["# r0412: profiler sidecar layout for this host",
+                               "include = ../overrides/app-07-profiler.conf"]])
             summaries.append("app-07 host overrides update")
+        elif rev == 413:
+            cfg["environments/prod-b.conf"].sections.append(
+                ["transcode", ["# r0413: admin listener joins the shared admin range", "admin_port = 9446"]])
+            summaries.append("prod-b listener layout update")
         elif rev == 417:
             cfg["environments/prod-b.conf"].sections.append(
                 ["tagging", ["# r0417: admin listener joins the shared admin range", "admin_port = 9446"]])
+            cfg["environments/prod-b.conf"].sections.append(
+                ["transcode", ["# r0417: admin listener moved", "admin_port = 9458"]])
             summaries.append("prod-b listener layout update")
         elif rev == 418:
             cfg["profiles/edge.conf"].sections.append(["tagging", ["# r0418", "admin_port = 9452"]])
@@ -711,7 +779,8 @@ def main(out_dir):
 
     # Files the planned story depends on must not change after the revision the host loaded.
     for rev in (418, 419):
-        for p in ("environments/prod-b.conf", "hosts/app-07.conf", "profiles/core.conf", "shared/limits.conf"):
+        for p in ("environments/prod-b.conf", "hosts/app-07.conf", "profiles/core.conf", "profiles/media.conf",
+                  "shared/limits.conf"):
             assert p not in changes[rev][1], (rev, p)
 
     svc_files = service_files()
@@ -722,24 +791,48 @@ def main(out_dir):
     target = [r for r in recs if r.get("target")][0]
     assert target["id"] == EXPECT_DEPLOY, target["id"]
     assert target["hosts"] == "all" and target["rev"] == 418
-    applies_here = [r for r in recs if r["mode"] == "apply" and HOST in r["host_list"]]
-    assert applies_here[-1] is target
+    cancelled = [r for r in recs if r.get("cancel")][0]
+    assert cancelled["id"] == EXPECT_CANCELLED, cancelled["id"]
+    assert cancelled["rev"] == 418 and cancelled["failed_starts"] == 1
+    later_here = [r for r in recs if r["when"] > target["when"] and HOST in r["host_list"]]
+    assert [r["id"] for r in later_here if r["mode"] == "apply"] == [EXPECT_CANCELLED]
+    runs_here = [x["deploy"] for x in hosts_state[HOST]["runs"]]
+    assert runs_here[-1] == EXPECT_DEPLOY and EXPECT_CANCELLED not in runs_here
     assert recs[-1]["mode"] == "dry-run"
+    assert target["failed_starts"] == 1
     got = [(svc, l, p, holder) for (_, svc, l, p, holder) in failures[HOST]]
     assert got == EXPECT_FAILURES, got
     assert failures[HOST][-1][0] == EXPECT_DEPLOY
     for h in ALL_HOSTS:
         if h != HOST:
-            assert not failures[h], (h, failures[h])
-    live = dict(svc_files)
-    live.update({f"/app/config/{p}": x for p, x in snapshots[REV_LAST].items()})
-    assert resolve(live, HOST_ENV, HOST, "tagging")["admin"] == 9452
-    assert resolve(live, HOST_ENV, HOST, "recommend")["main"] == 9446
+            assert failures[h] == EXPECT_OTHER_FAILURES.get(h, []), (h, failures[h])
+    for r in recs:
+        if r["mode"] == "apply" and r["id"] not in (EXPECT_DEPLOY, EXPECT_CANCELLED):
+            assert r["failed_starts"] == (1 if r["id"] == failures[HOST][0][0] else 0), r["id"]
+
+    def files_at(rev):
+        f = dict(svc_files)
+        f.update({f"/app/config/{p}": x for p, x in snapshots[rev].items()})
+        return f
+    assert resolve(files_at(REV_LAST), HOST_ENV, HOST, "tagging")["admin"] == 9452
+    assert resolve(files_at(417), HOST_ENV, HOST, "tagging")["admin"] == 9446
+    assert resolve(files_at(417), HOST_ENV, HOST, "transcode")["admin"] == 9458
+    assert resolve(files_at(416), HOST_ENV, HOST, "transcode")["admin"] == 9446
+    assert resolve(files_at(417), HOST_ENV, HOST, "ratings") == {"enabled": False, "main": 9324, "admin": 9446}
+    assert resolve(files_at(417), HOST_ENV, HOST, "recommend")["main"] != 9446
     run = [x for x in hosts_state[HOST]["runs"] if x["deploy"] == EXPECT_DEPLOY][0]
     assert run["loaded"] == 417
-    holder_pid = run["ports"]["9446"]
-    assert hosts_state[HOST]["procs"][str(holder_pid)]["cmd"].startswith("/opt/svc/recommend/")
-    assert "9452" not in run["ports"]
+    # Holder at the failure: the transcode process started by the previous run on this host.
+    fail_pid = run["failed_pids"][0]
+    fail_at = hosts_state[HOST]["procs"][str(fail_pid)]["exited_at"]
+    assert hosts_state[HOST]["procs"][str(fail_pid)]["cmd"].startswith("/opt/svc/tagging/")
+    evs = hosts_state[HOST]["ports"]["9446"]
+    before = [e for e in evs if e[0] <= fail_at]
+    assert before[-1][1] == "bind", before[-1]
+    holder_pid = before[-1][2]
+    assert hosts_state[HOST]["procs"][str(holder_pid)]["cmd"].startswith("/opt/svc/transcode/")
+    after = [e for e in evs if e[0] > fail_at]
+    assert after == [[after[0][0], "release", holder_pid]], after
 
     # ---- write
     if out.exists():
@@ -783,7 +876,7 @@ def main(out_dir):
         write(f"bin/{prog.name}", prog.read_text(), 0o755)
     write("var/statusd/state.bin", encode_state({"hosts": hosts_state}))
 
-    port_pool = sorted({PROFILE_BASE[SVC_PROFILE[s]] + SVC_OFFSET[s] for s in SVC_NAMES} | {9446, 9452, 9436, 9512})
+    port_pool = sorted({PROFILE_BASE[SVC_PROFILE[s]] + SVC_OFFSET[s] for s in SVC_NAMES} | {9446, 9452, 9436, 9512, 9458})
     by_svc = {s: [] for s in SVC_NAMES}
     for e in events:
         if LOG_START <= e[0] <= LOG_END:

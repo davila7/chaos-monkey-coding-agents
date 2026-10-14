@@ -19,6 +19,7 @@ Contents:
 13. Auxiliary files
 14. Command line
 15. Errors
+16. Checking the rules
 
 ## 1. Package layout
 
@@ -36,7 +37,7 @@ The package is split into sub-packages that depend on each other in one directio
 | `ledger.render` | text, CSV, Markdown, HTML and JSON output |
 | `ledger.cli` | the `python -m ledger` command line |
 
-Modules whose names start with an underscore (`_currency_table`, `_dialect_table`, `_chart`, `_rule_table`, `_merchant_table`, `_holiday_table`) hold data tables. They are part of the package and are read at import time.
+Modules whose names start with an underscore hold data tables (currencies, dialects, the chart of accounts, tax rules, merchants, holidays). They are part of the package and are read at import time.
 
 The base currency is the US dollar (`ledger.BASE_CURRENCY`). Every report value is an integer number of US cents.
 
@@ -89,17 +90,17 @@ An empty id, an id used twice (`DuplicateEntry`) and an entry that reverses itse
 
 ### 2.4 Other formats
 
-`ledger.parse.importers` reads two more formats into the same `Statement`: JSON lines (`.jsonl`) and fixed-width text (`.txt`). Both are converted to CSV text first, so every rule in this note applies to them unchanged. In both formats amounts are strings written in the statement's layout. A `delimiter` header key in these formats is ignored, because the converted text is always comma-delimited.
+The package reads two more formats into the same kind of statement: JSON lines (`.jsonl`) and fixed-width text (`.txt`). Both are converted to CSV text first, so every rule in this note applies to them unchanged. In both formats amounts are strings written in the statement's layout. A `delimiter` header key in these formats is ignored, because the converted text is always comma-delimited.
 
 ### 2.5 Writing statements
 
-`ledger.parse.writer.write_statement` writes a statement so that it reads back to the same entries. It writes the dialect name when the statement has one and also every layout key explicitly, so the written file does not depend on the dialect table. Amounts are written without group separators and with a leading minus for negatives.
+Writing a statement produces text that reads back to the same statement: the same entries, the same layout and the same fiscal start. It writes the dialect name when the statement has one and also every layout key explicitly, so the written file does not depend on the dialect table. Amounts are written without group separators and with a leading minus for negatives.
 
 ## 3. Dialects and layout
 
 ### 3.1 What a layout is
 
-The layout of a statement is the set of four values that decide how its body is read: `delimiter`, `decimal`, `date_order` and `jurisdiction`. `Statement.layout` holds the layout a statement was read with, and `ledger check` prints it.
+The layout of a statement is the set of four values that decide how its body is read: `delimiter`, `decimal`, `date_order` and `jurisdiction`. A statement keeps the layout it was read with, and `ledger check` prints it.
 
 ### 3.2 Delimiter values
 
@@ -107,7 +108,7 @@ A `delimiter` value is either a name (`comma`, `semicolon`, `pipe`, `tab`, case-
 
 ### 3.3 Dialects
 
-A dialect records the layout one sender uses for all its statements, so that a header can name the sender (`#dialect: northgate`) instead of spelling each value out. Dialect names are case-insensitive. The table is in `ledger.parse._dialect_table`; an unknown name is `UnknownDialect`.
+A dialect records the layout one sender uses for all its statements, so that a header can name the sender (`#dialect: <name>`) instead of spelling each value out. Dialect names are case-insensitive. The dialect table is one of the package's data tables; an unknown name is `UnknownDialect`.
 
 ### 3.4 Which value wins
 
@@ -117,16 +118,7 @@ Each layout key takes its value from the first of these sources that has one:
 2. the dialect named by the statement's `dialect` header;
 3. the base layout: delimiter `,`, decimal `.`, date order `ymd`, no jurisdiction.
 
-A header line therefore always wins over the dialect. This is what lets one sender's statement deviate from its usual layout (an export made with a different setting, or an account held in another jurisdiction) without a new dialect. A dialect only fills the keys the header leaves out.
-
-Example: the `northgate` dialect is semicolon-delimited with a `,` decimal mark, `dmy` dates and jurisdiction `ARD`. A statement with the header lines below is read with delimiter `,`, decimal `.`, `ymd` dates and jurisdiction `ARD`:
-
-    #account: cross-month
-    #currency: EUR
-    #dialect: northgate
-    #delimiter: comma
-    #decimal: .
-    #date_order: ymd
+A header line therefore always wins over the dialect, key by key, including a header line with an empty value (an empty `jurisdiction` means the statement is not taxed, whatever the dialect says). This is what lets one sender's statement deviate from its usual layout without a new dialect. A dialect only fills the keys the header leaves out.
 
 ### 3.5 Checks on a layout
 
@@ -134,13 +126,13 @@ Example: the `northgate` dialect is semicolon-delimited with a `,` decimal mark,
 
 ### 3.6 Guessing
 
-`ledger.parse.sniff` guesses a layout from a file's body and `ledger check --guess` compares the guess with the layout the file is read with. The guess is advisory: reading always follows section 3.4, never the guess.
+The package can guess a layout from a file's body, and `ledger check --guess` compares the guess with the layout the file is read with. The guess is advisory: reading always follows section 3.4, never the guess.
 
 ## 4. Amounts
 
 ### 4.1 Minor units
 
-Amounts are stored as integers in minor units of their currency. The number of minor-unit digits is the currency's exponent from `ledger.core._currency_table`: 2 for most currencies, 0 for currencies such as JPY or KRW, 3 for currencies such as KWD, BHD or TND. So `12.34` EUR is 1234, `1500` JPY is 1500 and `1.5` KWD is 1500.
+Amounts are stored as integers in minor units of their currency. The number of minor-unit digits is the currency's exponent from the currency table: 2 for most currencies, 0 for currencies such as JPY or KRW, 3 for currencies such as KWD, BHD or TND. So `12.34` EUR is 1234, `1500` JPY is 1500 and `1.5` KWD is 1500.
 
 ### 4.2 Accepted forms
 
@@ -156,7 +148,7 @@ Anything else is a `FormatError`: an empty amount, more fraction digits than the
 
 ### 4.3 Display
 
-Formatting goes the other way (`ledger.core.money.format_amount`): the whole part, the decimal mark and exactly `exponent` fraction digits, with an optional group separator every three digits. A negative amount is written with a single leading minus sign before its digits and is otherwise written exactly like the positive amount of the same size: -50 cents is `-0.50`, -123456 cents is `-1,234.56` with `,` groups. Zero is never negative. Section 12 says which formats use which separators.
+Formatting goes the other way, through one shared formatter in `ledger.core`: the whole part, the decimal mark and exactly `exponent` fraction digits, with an optional group separator every three digits. A negative amount is written with a single leading minus sign before its digits and is otherwise written exactly like the positive amount of the same size, whatever its size. Zero is never negative. Section 12 says which formats use which separators.
 
 ## 5. Dates, months and fiscal periods
 
@@ -172,21 +164,21 @@ Years have four digits; day and month have one or two. A date that does not exis
 
 ### 5.2 Month keys
 
-A month key is `YYYY-MM`. Month keys sort correctly as strings. `iter_months(first, last)` includes both ends; `months_between(start, stop)` is half-open and excludes `stop`. A range written in a data file (rate files, section 6.1) always includes both of its end months.
+A month key is `YYYY-MM`. Month keys sort correctly as strings. A range written in a data file (rate files, section 6.1) always includes both of its end months.
 
 ### 5.3 Fiscal years
 
-A fiscal year starts on the first day of the account's `fiscal_start` month (1 when absent) and is named after the calendar year in which it ends. With `fiscal_start` 4, April 2025 to March 2026 is FY2026. Quarters are numbered from the start of the fiscal year: with `fiscal_start` 4, January 2026 is in FY2026-Q4.
+A fiscal year starts on the first day of the account's `fiscal_start` month (1 when absent), runs for twelve months and is named after the calendar year in which it ends. Quarters are numbered 1 to 4 from the start of the fiscal year, three months each, and are labelled `FY<year>-Q<n>`. Every part of the package that groups months into fiscal years or quarters follows this rule.
 
 ### 5.4 Weeks and business days
 
-Weeks follow ISO 8601 (`ledger.periods.weeks`). A business day is a Monday to Friday that is not a public holiday of the statement's jurisdiction (`ledger.periods._holiday_table`); a statement without a jurisdiction only skips weekends. Business days are used by the aging report only.
+Weeks follow ISO 8601. A business day is a Monday to Friday that is not a public holiday of the statement's jurisdiction (holiday table); a statement without a jurisdiction only skips weekends. Business days are used by the aging report only.
 
 ## 6. Exchange rates
 
 ### 6.1 Rate files
 
-A rate file is a CSV file with the columns `currency`, `from`, `to` and `rate`, in that order. Lines starting with `#` and blank lines are ignored. Each row says that, in every month from `from` to `to` (both included), one major unit of `currency` was worth `rate` US dollars. A row whose `from` and `to` are the same month covers exactly that month.
+A rate file is a CSV file with the columns `currency`, `from`, `to` and `rate`, in that order. Lines starting with `#` and blank lines are ignored. Each row says that, in every month from `from` to `to` (both included), one major unit of `currency` was worth `rate` US dollars.
 
 Rules:
 
@@ -195,7 +187,7 @@ Rules:
 - The base currency has no rows; a USD row is an error.
 - Two rows that cover the same currency and month are a `RateConflict`, whether they are in one file or in two files loaded together.
 
-The table built from a rate file (`RateTable`) holds exactly the months the rows cover, one entry per currency and month.
+The rate table built from a rate file holds exactly the months the rows cover, one entry per currency and month.
 
 ### 6.2 Which rate applies to a month
 
@@ -205,16 +197,7 @@ The rate for a currency in a month is chosen as follows:
 2. Otherwise the most recent earlier month that the table lists is used, provided it is at most three months before the month in question (`MAX_LOOKBACK`). The rate is then said to be carried from that month.
 3. Otherwise there is no rate, and `MissingRate` is raised.
 
-A later month's rate is never used, not even when it is closer than the nearest earlier one: it was not known at the time of the entry. Examples, with rates listed for January to March and for May:
-
-| Month | Rate used |
-|---|---|
-| March | March |
-| April | March (carried, one month back) |
-| May | May |
-| December of the year before | none: `MissingRate`, even though January is only one month later |
-
-With rates listed only for January, April is carried from January (three months back) and May has no rate.
+A later month's rate is never used, not even when it is nearer than the nearest earlier listed month: it was not known at the time of the entry.
 
 The base currency always has the rate 1 in every month.
 
@@ -228,28 +211,17 @@ The cross rate from currency A to currency B in a month is rate(A) / rate(B), ea
 
 An amount of `m` minor units of a currency with exponent `e`, at rate `r`, is worth exactly `m * r * 10^(2 - e)` US cents. This value is computed with exact decimal arithmetic (Python `Decimal`), never with binary floats.
 
-Each entry is converted on its own and rounded to whole cents (7.2) before it is added to anything. Every total in every report (a month, a category, a tax code, a trial balance row, a report total) is a sum of rounded entry values. Totals are never rounded again, and an exact sum is never rounded as a whole. For example, two entries of 41.00 EUR at 1.0825 are each 4438.25 cents exactly; each rounds to 4438, and their month total is 8876, not the 8877 that rounding their exact sum 8876.5 would give.
+Each entry is converted on its own and rounded to whole cents (7.2) before it is added to anything. Every total in every report and every value built from totals (a month, a quarter, a category or account cell, a tax code, a trial balance row, a book value, a report total) is a sum of rounded entry values. Totals are never rounded again, and an exact sum is never rounded as a whole.
 
 ### 7.2 The rounding rule
 
-All rounding in the package rounds to the nearest integer, and a value exactly halfway between two integers is rounded away from zero:
+All rounding in the package rounds to the nearest integer, and a value exactly halfway between two integers is rounded away from zero, for positive and negative values alike. The same rule applies when rounding to a number of decimal places. Rounding half to even ("banker's rounding") is not used anywhere, because it does not match the rounding the senders use on their own statements.
 
-| Exact value | Rounded |
-|---|---|
-| 216.5 | 217 |
-| -216.5 | -217 |
-| 2.5 | 3 |
-| 3.5 | 4 |
-| -0.5 | -1 |
-| 10.49 | 10 |
-
-The same rule applies when rounding to decimal places (cross rates, percentages, statistics): 1.23455 to four places is 1.2346. Rounding half to even ("banker's rounding") is not used anywhere, because it does not match the rounding the senders use on their own statements.
-
-`ledger.core.rounding.round_half_away` implements this rule and every other module rounds through it (or through `round_to`, which uses the same rule).
+The rule covers every value the package rounds, money or not. The rounding helpers in `ledger.core` implement it, and every other part of the package rounds through them: nowhere else does code round on its own (Python's built-in `round`, `Decimal.quantize` or `to_integral` with a context or mode of its own, or binary floats).
 
 ### 7.3 Allocation
 
-`allocate(total, weights)` splits an integer amount in proportion to weights with the largest remainder method; the shares always add up to the total. Remainders go one unit at a time to the largest fractional parts, earlier positions first on ties. Negative totals are allocated as their absolute value and negated.
+Allocation splits an integer amount in proportion to weights with the largest remainder method; the shares always add up to the total. Remainders go one unit at a time to the largest fractional parts, earlier positions first on ties. Negative totals are allocated as their absolute value and negated.
 
 ## 8. Reversals
 
@@ -274,37 +246,35 @@ A reversal does not create an event of its own in the reports; it undoes the ori
 - it is booked in the period (month) of the original entry, not in the month in which it was posted;
 - it is valued as of the original entry's date: it is converted at the rate that applies to the original's month (section 6.2), and when it is taxed, the tax rule in force on the original's date applies (section 10.2).
 
-Both dates come from the original. In `ledger.book.reversals`, a `Booking` carries a `period_date` and a `valuation_date`; for a regular entry both are its own date, and for a reversal both are the original's date. A matched pair therefore nets to exactly zero in every report, in every currency and for tax, even when the reversal is posted in a later month whose exchange rate or tax rate differs.
-
-Example: an entry of -150.40 EUR dated 20 January and its reversal dated 3 February both belong to January and are both converted at January's rate. The February report does not show either of them.
+Both dates come from the original. For a regular entry the period date and the valuation date are its own date; for a reversal both are the original's date. A matched pair therefore nets to exactly zero in every report built on booking periods or valuation dates, in every currency and for tax, even when the reversal is posted in a later month, quarter or year whose exchange rate or tax rate differs. Section 11.5 names the views that deliberately stay on posting dates.
 
 ### 8.4 Reversals elsewhere
 
-Splits (13.2) split a reversal with the same weights as its original, part by part. The audit (`ledger audit`) reports reversals posted more than 60 days after their original; this is informational only.
+Splits (13.2) split a reversal with the same weights as its original, part by part. The statement audit (`ledger audit`) reports reversals posted more than 60 days after their original; this is informational only.
 
 ## 9. Categories and accounts
 
 ### 9.1 Resolution
 
-The chart of accounts (`ledger.book._chart`) maps categories to account codes. A category is a dotted path such as `travel.rail.season`. An entry's category is resolved to the account of the longest listed prefix of its path: `travel.rail.night` uses the account of `travel.rail` when only that is listed, and `travel.bus` uses the account of `travel`. Categories are compared in lower case.
+The chart of accounts maps categories to account codes. A category is a dotted path such as `travel.rail.season`. An entry's category is resolved to the account of the longest listed prefix of its path: `travel.rail.night` uses the account of `travel.rail` when only that is listed, and `travel.bus` uses the account of `travel`. Categories are compared in lower case.
 
 An empty category goes to the suspense account `9990`. A non-empty category with no listed prefix, or with an empty segment (`travel..rail`), is `UnknownCategory`.
 
 ### 9.2 Suggestions and rules
 
-`ledger suggest` proposes categories for entries without one, from the merchant table. Suggestions are never applied by the reports. A rules file (`ledger.book.rules`) can assign categories to uncategorized entries before booking, when a caller applies it explicitly; reading a statement never applies rules.
+`ledger suggest` proposes categories for entries without one, from the merchant table. Suggestions are never applied by the reports. A rules file can assign categories to uncategorized entries before booking, when a caller applies it explicitly; reading a statement never applies rules.
 
 ## 10. Tax
 
 ### 10.1 Codes and jurisdictions
 
-Tax codes are `S` (standard), `R` (reduced), `Z` (zero rated) and `E` (exempt). Each jurisdiction in `ledger.tax._rule_table` has, per code, a list of rules: a date from which a rate applies, and the rate. Rates in the table are written as fractions (`0.095`) or percentages (`9.5%`).
+Tax codes are `S` (standard), `R` (reduced), `Z` (zero rated) and `E` (exempt). Each jurisdiction in the tax rule table has, per code, a list of rules: a date from which a rate applies, and the rate. Rates in the table are written as fractions (`0.095`) or percentages (`9.5%`).
 
 A statement is taxed in its layout's jurisdiction. An entry with a tax code in a statement without a jurisdiction, an unknown jurisdiction, an unknown code, or a date before the code's first rule is `UnknownTaxCode`. Entries without a tax code are not part of tax reports.
 
 ### 10.2 Which rule applies
 
-The rule that applies on a day is the rule of the entry's code with the latest effective date that is on or before that day. A rule takes effect on its effective date itself: a rate that applies from 1 March 2026 applies to an entry valued on 1 March 2026, and the previous rate applies to an entry valued on 28 February 2026.
+The rule that applies on a day is the rule of the entry's code with the latest effective date that is on or before that day. A rule takes effect on its effective date itself, and the previous rule applies up to the day before.
 
 The day is the entry's valuation date (section 8.3): its own date for a regular entry, the original's date for a reversal.
 
@@ -316,13 +286,13 @@ Because the rounding rule is symmetric, the tax of a reversal is exactly the neg
 
 ### 10.4 Returns and schedules
 
-A quarterly return (`ledger return`) adds the per-entry tax lines of one jurisdiction's statements by calendar quarter of their valuation dates. `ledger schedule` prints a jurisdiction's rules; each rule's "until" date is the effective date of the next rule of the same code, and the rule no longer applies on that date.
+A quarterly return (`ledger return`) adds the per-entry tax lines of one jurisdiction's statements by calendar quarter of their valuation dates (section 8.3), so a reversal is declared in the quarter of its original. `ledger schedule` prints a jurisdiction's rules; each rule's "until" date is the effective date of the next rule of the same code, and the rule no longer applies on that date.
 
 ## 11. Reports
 
 ### 11.1 Monthly report
 
-`build_monthly` returns:
+The monthly report is:
 
     {"account": "...", "currency": "EUR", "base": "USD",
      "months": {"2026-01": -12345, ...}, "total": -12345}
@@ -331,12 +301,13 @@ A quarterly return (`ledger return`) adds the per-entry tax lines of one jurisdi
 
 ### 11.2 Tax report
 
-`build_vat` returns, per tax code used by the statement, the sums of the per-entry gross, net and tax amounts (section 10.3), plus `total_tax`, the sum of the tax amounts. Codes are listed in alphabetical order. A statement without taxed entries has an empty `codes` mapping.
+The tax report gives, per tax code used by the statement, the sums of the per-entry gross, net and tax amounts (section 10.3), plus `total_tax`, the sum of the tax amounts. Codes are listed in alphabetical order. A statement without taxed entries has an empty `codes` mapping.
 
 ### 11.3 Balances, summaries and comparisons
 
 - Balances list every month from the first to the last month of a monthly report, months without entries included, with the movement and the closing balance.
 - Fiscal summaries add month values by fiscal quarter and fiscal year (section 5.3).
+- The quarterly report lists, for each fiscal quarter (section 5.3) that holds at least one booking period with entries: the quarter's three month keys, its total (the sum of its month values), the average per month (the total divided by three, rounded with 7.2) and the number of entries booked in it. Its grand total is the sum of the quarter totals.
 - Month-over-month and year-over-year comparisons give percentages rounded to one decimal with the rule of 7.2, written with a sign (`+12.5%`). A change from zero is `new`.
 
 ### 11.4 Trial balance and account matrix
@@ -345,8 +316,9 @@ The trial balance and the account-by-month matrix are built from journal posting
 
 ### 11.5 Other reports
 
+- Recurring payments (`ledger outlook`): entries that share a cleaned description form a group when the group repeats often enough at a steady interval with similar amounts. A group's typical amount is the median of its amounts and its step is the median of the gaps between its dates in days; a median that falls between two values is rounded with 7.2. The outlook projects each group forward by its step, in the statement currency, because future rates are unknown.
 - Aging lists open receivables (positive regular entries in a `receivable` account that no reversal cancels) by business days outstanding, in buckets 0-20, 21-40, 41-60 and 61+. Amounts stay in the statement currency.
-- Revaluation compares, at each month end, the book value (sum of posted rounded values) with the running balance converted once at that month's rate.
+- Revaluation compares, at each month end, the book value (the sum of the rounded values of the entries booked up to that month, 7.1) with the running balance converted once at that month's rate.
 - Reconciliation compares sender-reported closing balances with the sum of entries by posting date. It deliberately ignores booking periods, because the sender does not know them.
 - Budgets compare planned and actual account totals by month.
 
@@ -359,18 +331,20 @@ All renderers take the report dicts of section 11 and show amounts in major unit
 | text | `.` | `,` | leading minus | `-1,234.56` |
 | CSV | `.` | none | leading minus | `-1234.56` |
 | Markdown | `.` | `,` | leading minus | `-1,234.56` |
-| HTML | `.` | `,` | leading minus, cell class `neg` | `-1,234.56` |
+| HTML | `.` | `,` | leading minus, cell class `neg` (total rows included) | `-1,234.56` |
 | JSON | not applicable | not applicable | integer cents | `-123456` |
 
-All of them use `ledger.core.money.format_amount`, whose output is defined in section 4.3; a renderer never formats amounts on its own. Small negative amounts keep their sign: -50 cents is `-0.50` in text, CSV, Markdown and HTML alike.
+All of them use the shared formatter of section 4.3; a renderer never formats amounts on its own and never drops or replaces the sign of an amount, in any row or cell.
 
-The accounting style (`format_accounting`) puts negative amounts in parentheses. It is only used where a caller asks for it explicitly; no report format uses it.
+The accounting style puts negative amounts in parentheses. It is only used where a caller asks for it explicitly; no report format uses it.
 
 Text output: a title line, then a table whose columns are separated by two spaces, text left-aligned and amounts right-aligned, with trailing spaces removed from every line. The monthly report's last row is `total`.
 
 CSV output: a header row, then one row per line of the report, lines ending with `\n`, fields quoted only when needed.
 
 Markdown output: a `###` title, a blank line, and a pipe table whose amount columns are right-aligned (`---:`); the total row's label is bold.
+
+HTML output: a standalone page with one table per report; text is escaped, amount cells are right-aligned and total rows are bold.
 
 JSON output: keys sorted, two-space indentation, a final newline.
 
@@ -382,11 +356,11 @@ CSV with columns `account`, `month`, `amount`; amounts in US dollars with a `.` 
 
 ### 13.2 Splits
 
-CSV with columns `id`, `category`, `weight`. An entry named in the file is replaced by one part per line, sharing its amount with `allocate` (section 7.3). Part ids get the suffix `/1`, `/2`, ... in file order.
+CSV with columns `id`, `category`, `weight`. An entry named in the file is replaced by one part per line, sharing its amount by allocation (section 7.3). Part ids get the suffix `/1`, `/2`, ... in file order.
 
 ### 13.3 Closing files
 
-One month key per line; `#` starts a comment. `late_entries` lists the entries booked into a closed month although they were posted after that month ended (for instance a reversal posted in February of an entry from a closed January).
+One month key per line; `#` starts a comment. Late entries are the entries booked into a closed month although they were posted after that month ended.
 
 ### 13.4 Balance files
 
@@ -408,6 +382,8 @@ CSV with columns `month` and `closing`; amounts in the statement currency with a
 | `vat STATEMENT [--format F]` | Tax report (11.2). |
 | `balances STATEMENT [--format F]` | Running balances (11.3). |
 | `summary STATEMENT [--format F]` | Fiscal quarters and years (11.3). |
+| `quarterly STATEMENT [--format F]` | Quarterly report (11.3). |
+| `pack STATEMENT [--opening CENTS]` | Monthly report, balances, quarterly report and, for a taxed statement, tax report on one HTML page. |
 | `explain STATEMENT ID` | How one entry is read, booked, valued and taxed, one stage per line. |
 | `revalue STATEMENT` | Month-end revaluation (11.5), as JSON. |
 | `aging STATEMENT DATE` | Open receivables on DATE (11.5). |
@@ -415,16 +391,16 @@ CSV with columns `month` and `closing`; amounts in the statement currency with a
 | `suggest STATEMENT` | Category suggestions for uncategorized entries (9.2). |
 | `outlook STATEMENT [--months N]` | Recurring payments projected forward, in the statement currency. |
 
-`--format` is one of `text`, `csv`, `markdown` and `json` (section 12); `text` when absent.
+`--format` is one of `text`, `csv`, `markdown`, `html` and `json` (section 12); `text` when absent. A format without a view for a report is an error.
 
 ### 14.2 Several statements
 
 | Command | Output |
 |---|---|
 | `trial STATEMENT... [--period MONTH]` | Trial balance (11.4), optionally for one booking period. |
-| `matrix STATEMENT...` | Account-by-month matrix (11.4), as JSON. |
+| `matrix STATEMENT... [--format F]` | Account-by-month matrix (11.4); `json` (when absent), `text` or `html`. |
 | `transfers STATEMENT...` | Pairs of cash entries in different statements that cancel within a tolerance and lie at most three days apart. |
-| `return STATEMENT...` | Quarterly tax return of one jurisdiction (10.4), as JSON. |
+| `return STATEMENT... [--format F]` | Quarterly tax return of one jurisdiction (10.4); `json` (when absent) or `text`. |
 | `export STATEMENT...` | Postings as plain-text double-entry transactions. |
 | `budget BUDGET STATEMENT...` | Budget against actual (13.1), as CSV. |
 | `overview STATEMENT...` | One line per statement: currency, dialect, entries, reversals, date range. |
@@ -445,37 +421,6 @@ CSV with columns `month` and `closing`; amounts in the statement currency with a
 
 Every error the package raises on purpose is a `LedgerError`. `FormatError` (and its subclass `HeaderError`) carry the file and one-based line when they come from a file, and show them as `path line N: message`. Errors are raised, never logged and skipped: a statement either reads completely or not at all.
 
-## 16. Worked examples
+## 16. Checking the rules
 
-The examples use these rates: EUR 1.0825 for January to March 2026 (one row), EUR 1.0910 for May and June 2026, and nothing for April.
-
-### 16.1 One entry from file to report
-
-A row `b3,2026-02-02,Rail pass,-84,,travel.rail.season,R` in a EUR statement with jurisdiction ARD:
-
-1. Amount: `-84` has no fraction, so it is -8400 minor units (4.2).
-2. Booking: a regular entry, so period and valuation date are its own date, 2 February 2026 (8.3).
-3. Rate: February is listed, rate 1.0825 (6.2).
-4. Conversion: -8400 * 1.0825 = -9093.0000 cents exactly, -9093 after rounding (7.1).
-5. Account: `travel.rail.season` is listed, account 5211 (9.1).
-6. Tax: code R in ARD on 2 February 2026; the reduced rule in force on that day is 9.5% from 15 October 2025 (10.2). Tax portion -9093 * 0.095 / 1.095 = -788.89..., rounded -789; net -8304 (10.3).
-
-### 16.2 A month without a listed rate
-
-An entry of 100.00 EUR dated 10 April 2026 uses March's rate, 1.0825, carried one month (6.2): 10825 cents. It does not use May's rate, although May is listed and equally close. An entry dated 10 December 2025 has no rate at all, because no earlier month is listed: `MissingRate`.
-
-### 16.3 A reversal posted in a later month
-
-Entry x2 of -150.40 EUR on 20 January 2026 is reversed by x3, +150.40 EUR on 3 February 2026. Both are booked in January and both are converted at January's rate: -16281 and +16281 cents. January's total includes both; February's does not include x3. If January and February had different rates, x3 would still use January's. If the tax rate changed on 1 February, x3 would still be taxed at the rate in force on 20 January.
-
-### 16.4 Rounding a month
-
-A EUR statement with two entries of 41.00 in February at 1.0825: each is 4438.25 cents exactly and 4438 rounded. February's total is 8876. Rounding the exact sum, 8876.5, would give 8877 under 7.2 and 8876 under half-to-even rounding; neither is how totals are formed, because totals add rounded entries.
-
-### 16.5 Precedence of header lines
-
-A statement with `#dialect: lowmarsh` and `#date_order: dmy` is read with `dmy` dates whatever date order the `lowmarsh` dialect records, and with the dialect's delimiter, decimal mark and jurisdiction for the keys the header leaves out (3.4). `python -m ledger check FILE` prints the layout actually used.
-
-### 16.6 Negative amounts in output
-
-A month total of -50 cents is shown as `-0.50` in text, CSV, Markdown and HTML, and as `-50` in JSON. A total of -123456 cents is `-1,234.56` in text, Markdown and HTML and `-1234.56` in CSV (section 12).
+`python tools/audit.py`, run from `/app`, checks the package against a subset of the rules of this note. It runs parts of the package on inputs of its own and prints, for each rule it covers (by section number) and each sub-package, how many of its checks failed. A failure is counted under the sub-package whose function returned the wrong value, which is not always the sub-package that holds the cause. For rule 7.2 it also counts the places outside `ledger.core` that round on their own. It names no files, functions or lines. A clean audit does not replace the tests, and passing tests do not replace the audit: both must be clean.
