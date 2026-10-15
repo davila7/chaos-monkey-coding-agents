@@ -234,7 +234,7 @@ Implemented 2026-10-10: profiles are `tt-profile/2` with `max_applied_per_trial`
 ## D-0016 Results site
 
 - Date: 2026-10-10
-- Status: Proposed. The owner asked for the results site on 2026-10-10; merging the PR approves it.
+- Status: Accepted. The owner merged PR #6, which carried this entry.
 
 Context: D-0013 item 8 plans a minimal static page for the smoke run. On 2026-10-10 the owner asked for the public results site, deployed to Vercel, with a leaderboard in the style of tbench.ai. SPEC 9.8 describes the full site for M7; SPEC 9.7 names the analysis output but defines no file format for site data. No result artifact exists yet: the conformance batch running on the owner's machine produces capability data, not leaderboard rows.
 
@@ -256,7 +256,7 @@ Consequences: `cmca analyze` must emit `site-data/1`; any field change goes thro
 ## D-0017 Parity gaps per capability class
 
 - Date: 2026-10-10
-- Status: **Proposed**, needs the owner's decision. Merging the PR approves option 1.
+- Status: Accepted, option 1. The owner merged PR #9, which carried this entry.
 
 Context: the first conformance run of Claude Code 2.1.289 (V-01) found that `empty` reaches the model on `Read` and `Bash` but cannot reach it on `Write` or `Edit`: the tool's own mapper renders a fixed success line from any result record. SPEC 6.4 and 9.6 define the parity set per fault type: "A fault type enters the parity set only if all runs pass." Read strictly, one undeliverable cell removes `empty` from the Claude Code parity set and, through board parity, from every config compared with it.
 
@@ -275,7 +275,7 @@ Consequences: a config's effective type mix differs per class when it has gaps, 
 ## D-0018 Build log on the results site
 
 - Date: 2026-10-10
-- Status: Proposed. The owner asked for it on 2026-10-10; merging the PR approves it.
+- Status: Accepted. The owner merged PR #10, which carried this entry.
 
 Context: the owner asked to publish the first conformance batch as a blog post that explains, in plain terms, how the benchmark is being built. SPEC 15.1 lists no blog, and SPEC 0 and rule 4 require every published number to come from a committed artifact.
 
@@ -356,7 +356,7 @@ Consequences: a poison `match` uses the harness's raw argument names (`file_path
 ## D-0022 Proxy CA pass-through for trials in claude.ai cloud sessions
 
 - Date: 2026-10-11
-- Status: Proposed (needed to run D-0013 item 7, the six smoke trials the owner approved with a $20 cap)
+- Status: Accepted. The owner merged PR #20, which carried this entry and the smoke run it enabled (D-0013 item 7, approved with a $20 cap).
 
 Context: in a "Chaos Monkey Cloud" session with full network access, task containers reach the internet through an egress proxy that re-terminates TLS. `apt-get` works, but `npm install -g @anthropic-ai/claude-code` fails with `SELF_SIGNED_CERT_IN_CHAIN`, so all three clean trials of the first attempt failed before the agent started ($0). A container given the session's CA bundle gets 200 from registry.npmjs.org and 401 (reachable, unauthenticated) from api.anthropic.com.
 
@@ -428,7 +428,7 @@ The longer agent timeouts do not change the pilot cap in item 5.
 ## D-0025 Animated monkey in the site banner
 
 - Date: 2026-10-13
-- Status: Proposed (draft PR, owner review)
+- Status: Accepted. The owner merged PR #27, which carried this entry.
 
 Context: the owner asked for the banner monkey to become an SVG in the same pixel style, with a flame that moves. The banner was one 2172 x 724 PNG (`packages/site/public/banner.png`).
 
