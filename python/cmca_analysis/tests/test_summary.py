@@ -125,3 +125,32 @@ def test_poison_eligible_needs_an_eligible_matching_call():
     assert poison_eligible([(read, ("Read", "", {"file_path": "/app/b.conf"}))], decl) is False
     assert poison_eligible([(_event(0, "Read", "fs.read", "skip"), ("Read", "", {"file_path": "/app/a.conf"}))], decl) is False
     assert poison_eligible([(_event(0, "Bash", "shell"), ("Bash", "", {"command": "cat /app/a.conf"}))], decl) is False
+
+
+def test_track_s_reads_the_gateway_log_and_the_job_profile(tmp_path: Path):
+    ev = tmp_path / "evidence"
+    raw_empty = json.dumps({"server": "tickets", "tool": "mcp_tickets_get_ticket", "result": {"content": [{"type": "text", "text": ""}]}})
+    raw_err = json.dumps({"result": {"content": [{"type": "text", "text": "Error: 503 Service Unavailable: upstream connect error or disconnect/reset before headers"}], "isError": True}})
+    _trial(ev, "fx-claude-moderate-a0", "s1__x", "s1", "moderate", 0,
+           [("mcp_tickets_get_ticket", raw_empty), ("mcp_tickets_search_tickets", raw_err)], [], 1.0, 0.1, "success")
+    _trial(ev, "cc-claude-moderate-a0", "s1__y", "s1", "moderate", 0,
+           [("mcp__tickets__get_ticket", "x"), ("mcp__tickets__get_ticket", "(mcp__tickets__get_ticket completed with no output)")], [], 1.0, 0.1, "success")
+    gateway = {
+        "s1__x": [_event(0, "get_ticket", "mcp.tickets.get_ticket", "apply", "empty", "empty.blank"),
+                  _event(1, "search_tickets", "mcp.tickets.search_tickets", "apply", "err", "err.unavailable")],
+        "s1__y": [_event(0, "get_ticket", "mcp.tickets.get_ticket"), _event(1, "get_ticket", "mcp.tickets.get_ticket", "apply", "empty", "empty.blank")],
+    }
+    for job, name in (("fx-claude-moderate-a0", "s1__x"), ("cc-claude-moderate-a0", "s1__y")):
+        t = ev / job / name
+        (t / "agent/tt/events.jsonl").unlink()
+        (t / "agent/tt").rmdir()
+        cfg = json.loads((t / "config.json").read_text())
+        cfg["agent"]["kwargs"].pop("tt_config_dir")
+        (t / "config.json").write_text(json.dumps(cfg))
+        (t / "artifacts/var/log/tt").mkdir(parents=True)
+        (t / "artifacts/var/log/tt/events.jsonl").write_text("".join(json.dumps(e) + "\n" for e in gateway[name]))
+    s = summarize(ev)
+    assert list(s["profiles"]) == ["moderate"]
+    m = s["profiles"]["moderate"]
+    assert m["faults_unjoined"] == 0 and m["faults_by_type"] == {"empty": 2, "err": 1}
+    assert (m["delivered"], m["delivery_verifiable"]) == (3, 3)
