@@ -37,8 +37,8 @@ export default function Smoke() {
           did not measure fault recovery. {faults === 0 ? 'No fault was applied.' : `${faults} faults were applied.`} Trials
           made {calls.min === calls.max ? calls.min : `${calls.min} to ${calls.max}`} eligible tool calls, below the
           exposure floor of {EXPOSURE_FLOOR} in <a href={`${SPEC}#103-authoring-rules`}>SPEC 10.3</a>, so the moderate
-          profile was expected to apply few or no faults. The tasks are being revised under D-0023 before any Track N result is
-          published.
+          profile was expected to apply few or no faults. The tasks were later rebuilt under D-0023, D-0024 and D-0026; the clean
+          pilots on the rebuilt tasks are described in the build log.
         </p>
 
         <section className="block">
