@@ -1,0 +1,1 @@
+Use the get_ticket tool of the tickets MCP server to fetch ticket 501, then quote the last line of its body in your answer. Do not use the shell or any other tool for this. If the tool reports an error, say so in your answer and stop; do not retry.

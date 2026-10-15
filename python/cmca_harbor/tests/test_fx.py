@@ -33,3 +33,31 @@ def test_every_pinned_version_has_both_archives():
     for sums in ARCHIVES.values():
         assert set(sums) == {"x86_64", "aarch64"}
         assert all(len(v) == 64 for v in sums.values())
+
+
+def test_provider_is_pinned_from_the_model_id(tmp_path):
+    from cmca_harbor.fx import ChaosFx
+
+    env = ChaosFx(logs_dir=tmp_path, model_name="anthropic/claude-sonnet-5.5", version="0.0.13").resolve_env_vars()
+    assert env["FX_PROVIDER_ORDER"] == "anthropic" and env["FX_PROVIDER_STRICT"] == "1"
+
+
+def test_pending_generations_are_settled_or_cost_is_withheld(tmp_path):
+    import shutil
+
+    from cmca_harbor.fx import settle_usage
+
+    # Shape of a real 2026-10-15 snapshot copied before fx's billing settled.
+    snapshot = {"billing": "pending", "total_cost": 0.068602, "cache_read_tokens": 0, "pending": [{"id": "gen_a"}, {"id": "gen_b"}]}
+    looked_up = {"gen_a": {"total_cost": 0.0053577, "native_tokens_cached": 14237}, "gen_b": {"total_cost": 0.01, "native_tokens_cached": 100}}
+    settled = settle_usage(snapshot, looked_up.get)
+    assert abs(settled["total_cost"] - 0.0839597) < 1e-9 and settled["cache_read_tokens"] == 14337
+    assert settle_usage(snapshot, lambda _id: None) is None
+
+    session = tmp_path / "s"
+    shutil.copytree(SESSION, session)
+    (session / "usage-v2.json").write_text(json.dumps({"snapshot": snapshot}))
+    usage = {"input_tokens": 132978, "output_tokens": 2362}
+    unsettled = session_to_atif(session, version="0.0.13", model="m", usage=usage).final_metrics
+    assert unsettled.total_cost_usd is None and unsettled.total_prompt_tokens == 132978
+    assert session_to_atif(session, version="0.0.13", model="m", usage=usage, settled=settled).final_metrics.total_cost_usd == settled["total_cost"]

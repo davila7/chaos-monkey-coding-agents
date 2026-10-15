@@ -8,6 +8,9 @@ agent pins the release archive by checksum, copies the fx session journal into
 
 import json
 import shlex
+import time
+import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +28,7 @@ ARCHIVES = {
     },
 }
 SESSION_DIR = "fx-session"
+GENERATION_URL = "https://ai-gateway.vercel.sh/v1/generation?id={}"
 
 
 class ChaosFxOptions(FxOptions, TtOptions):
@@ -38,8 +42,49 @@ def _text(result: dict[str, Any], session: Path) -> str:
     return result.get("preview") or ""
 
 
-def session_to_atif(session: Path, *, version: str, model: str | None, usage: dict[str, Any] | None = None) -> Trajectory:
-    """ATIF from an fx `sessions/<id>/` directory (`events.jsonl` schema_version 3)."""
+def settle_usage(snapshot: dict[str, Any], fetch: Callable[[str], dict[str, Any] | None]) -> dict[str, Any] | None:
+    """Cost and cache reads with fx's unsettled generations resolved; None when a lookup fails.
+
+    fx copies `usage-v2.json` before its billing settles: requests still in
+    `snapshot.pending` are missing from `total_cost` (V-08).
+    """
+    cost = float(snapshot.get("total_cost") or 0)
+    cached = int(snapshot.get("cache_read_tokens") or 0)
+    for pending in snapshot.get("pending") or []:
+        g = fetch(pending["id"])
+        if g is None:
+            return None
+        cost += float(g.get("total_cost") or 0)
+        cached += int(g.get("native_tokens_cached") or 0)
+    return {"total_cost": cost, "cache_read_tokens": cached}
+
+
+def gateway_generation(api_key: str, attempts: int = 12, sleep: Callable[[float], None] = time.sleep) -> Callable[[str], dict[str, Any] | None]:
+    # A generation record can take minutes to appear (404 until then, V-08); the
+    # default waits about three minutes per missing record.
+    def fetch(generation_id: str) -> dict[str, Any] | None:
+        req = urllib.request.Request(GENERATION_URL.format(generation_id), headers={"Authorization": f"Bearer {api_key}"})
+        for i in range(attempts):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    return json.load(r).get("data")
+            except (OSError, ValueError):
+                if i < attempts - 1:
+                    sleep(min(5 * (i + 1), 20))
+        return None
+
+    return fetch
+
+
+def session_to_atif(
+    session: Path, *, version: str, model: str | None, usage: dict[str, Any] | None = None, settled: dict[str, Any] | None = None
+) -> Trajectory:
+    """ATIF from an fx `sessions/<id>/` directory (`events.jsonl` schema_version 3).
+
+    `usage` is the `usage` object of fx's `--json` output (token totals over every
+    request); `settled` comes from `settle_usage`. Without `settled`, a cost is
+    reported only when the snapshot has nothing pending.
+    """
     events = [json.loads(line)["event"] for line in (session / "events.jsonl").read_text().splitlines() if line.strip()]
     steps: list[Step] = []
     pending: dict[str, Step] = {}
@@ -73,15 +118,18 @@ def session_to_atif(session: Path, *, version: str, model: str | None, usage: di
                 continue
             res = ObservationResult(source_call_id=body["call_id"], content=_text(body, session), extra={"status": body.get("status")})
             owner.observation = Observation(results=[*(owner.observation.results if owner.observation else []), res])
-    snapshot = {}
+    snapshot: dict[str, Any] = {}
     usage_file = session / "usage-v2.json"
     if usage_file.exists():
         snapshot = json.loads(usage_file.read_text()).get("snapshot", {})
+    if settled is None and not snapshot.get("pending"):
+        settled = {"total_cost": snapshot.get("total_cost"), "cache_read_tokens": snapshot.get("cache_read_tokens")}
+    usage = usage or {}
     final = FinalMetrics(
-        total_prompt_tokens=snapshot.get("input_tokens", (usage or {}).get("input_tokens")),
-        total_completion_tokens=snapshot.get("output_tokens", (usage or {}).get("output_tokens")),
-        total_cached_tokens=snapshot.get("cache_read_tokens"),
-        total_cost_usd=snapshot.get("total_cost"),
+        total_prompt_tokens=usage.get("input_tokens", snapshot.get("input_tokens")),
+        total_completion_tokens=usage.get("output_tokens", snapshot.get("output_tokens")),
+        total_cached_tokens=(settled or {}).get("cache_read_tokens"),
+        total_cost_usd=(settled or {}).get("total_cost"),
         total_steps=len(steps),
     )
     return Trajectory(
@@ -99,6 +147,17 @@ class ChaosFx(Fx):
     @staticmethod
     def name() -> str:
         return "chaos-fx"
+
+    def resolve_env_vars(self) -> dict[str, str]:
+        # AI Gateway retries a failed model request on every provider of the model,
+        # even a non-retryable 400 (V-08). Pinning the provider named in the model id
+        # makes fx send `providerOptions.gateway.only`, so one request is one attempt.
+        env = super().resolve_env_vars()
+        provider = (self.model_name or "").removeprefix("vercel_ai_gateway/").partition("/")[0]
+        if provider and "FX_PROVIDER_ORDER" not in env:
+            env["FX_PROVIDER_ORDER"] = provider
+            env["FX_PROVIDER_STRICT"] = "1"
+        return env
 
     async def _trust_extra_ca(self, environment) -> None:
         if not self.options.extra_ca_cert:
@@ -165,7 +224,14 @@ class ChaosFx(Fx):
                 summary = {}
         if not (session / "events.jsonl").exists():
             return
-        traj = session_to_atif(session, version=self._version or "", model=summary.get("model") or self.model_name, usage=summary.get("usage"))
+        settled = None
+        usage_file = session / "usage-v2.json"
+        if usage_file.exists() and self.model_connection.api_key:
+            snapshot = json.loads(usage_file.read_text()).get("snapshot", {})
+            settled = settle_usage(snapshot, gateway_generation(self.model_connection.api_key))
+        traj = session_to_atif(
+            session, version=self._version or "", model=summary.get("model") or self.model_name, usage=summary.get("usage"), settled=settled
+        )
         (self.logs_dir / "trajectory.json").write_text(json.dumps(traj.to_json_dict(), indent=2))
         fm = traj.final_metrics
         if fm is not None:
