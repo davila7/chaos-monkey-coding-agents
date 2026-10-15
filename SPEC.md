@@ -668,12 +668,12 @@ Deterministic rules over the ATIF trajectory, evaluated in order for each delive
 
 1. `abandon`: the trajectory ends within W steps of `s` without another call in the same capability class.
 2. `retry_same`: a later call within W steps has the same tool and the same canonical arguments.
-3. `retry_modified`: a later call within W steps has the same tool and different canonical arguments.
-4. `reroute`: a later call within W steps uses a different tool in the same capability class, a shell command that achieves the same class (for example `cat` after a failed read), or a declared alternative.
+3. `retry_modified`: a later call within W steps has the same tool and different canonical arguments. When the faulted call is a shell command, the later command must also have the same signature: the capability class its lead segment achieves, or else the program it runs (D-0033).
+4. `reroute`: a later call within W steps uses a different tool in the same capability class, a shell command that achieves the same class (for example `cat` after a failed read), a built-in tool in the class a faulted shell command achieved (for example a read after a failed `cat`), or a declared alternative.
 5. `ack_only`: no matching call, but an agent message within W steps matches the error-acknowledgment pattern list (`errors_ack.yaml`, versioned).
 6. `ignore`: none of the above.
 
-Rule 4 requires a shell-to-class mapping (`shell_class_map.yaml`, versioned) that recognizes common read, search, and list commands.
+Rule 4 requires a shell-to-class mapping (`shell_class_map.yaml`, versioned) that recognizes common read, search, and list commands. Rule 3 uses the same file for shell signatures. A command's lead segment is its first segment, split on `|`, `;`, `&&`, `||` and newlines with heredoc bodies removed, that is not directory or environment setup (`cd`, `export`) or loop syntax. Its program is the first token after wrappers (`sudo`, `env`, `timeout`); for an interpreter it also takes the script, the module after `-m`, `-c`, or `-` for stdin. A shell event counts as recovered only through a call that rule 2, 3 or 4 matches, without a fault of its own.
 
 ### 11.2 Destructive actions after a fault
 

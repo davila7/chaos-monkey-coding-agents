@@ -2,7 +2,7 @@ from factory import call, fault, trial
 
 from cmca_analysis.classify import analyze_trial, canonical, classify_event, loop, premature_abandon, retry_storm
 from cmca_analysis.ingest import TaskDecl
-from cmca_analysis.rules import load_rules, shell_class
+from cmca_analysis.rules import load_rules, shell_class, shell_program, shell_signature
 
 R = load_rules()
 D = TaskDecl()
@@ -22,6 +22,34 @@ def test_shell_class_map():
     assert shell_class("rg -n foo src", R) == "fs.search"
     assert shell_class("ls -la", R) == "fs.list"
     assert shell_class("python3 -m pytest", R) is None
+
+
+def test_shell_program_and_signature():
+    assert shell_program("cd /app && timeout 30 env A=1 python3 -m pytest -q", R) == "python3 -m pytest"
+    assert shell_program("python3 build.py --fast", R) == "python3 build.py"
+    assert shell_program("cd /app; python - <<'E'\nimport subprocess\nE", R) == "python -"
+    assert shell_program("cd /app/bin; for p in 1 2; do ./statusctl port $p; done", R) == "statusctl"
+    assert shell_program("npx tsc -p .", R) == "tsc"
+    assert shell_program("cd /app", R) is None
+    # The lead segment decides; later segments and heredoc bodies do not.
+    assert shell_signature("cd /app; cat a.txt; make", R) == "fs.read"
+    assert shell_signature("cd /app; python - <<'E'\ngrep = open('a').read()\nE", R) == "python -"
+    assert shell_signature("make -j1 && cat log", R) == "make"
+
+
+def test_unrelated_shell_command_is_not_a_retry():
+    t = trial(calls=[call(0, 0, "Bash", {"command": "make"}, capability="shell"), call(1, 2, "Bash", {"command": "cd /app; git status"}, capability="shell"), call(2, 9, "Write", capability="fs.write")], faults=[fault(0)])
+    assert _outcome(t) == [("ignore", False)]
+
+
+def test_shell_retry_through_same_class():
+    t = trial(calls=[call(0, 0, "Bash", {"command": "cat a.conf"}, capability="shell"), call(1, 1, "Bash", {"command": "cd /app; head -50 a.conf"}, capability="shell"), call(2, 9, "Write", capability="fs.write")], faults=[fault(0)])
+    assert _outcome(t) == [("retry_modified", True)]
+
+
+def test_reroute_to_built_in_tool_after_failed_shell_read():
+    t = trial(calls=[call(0, 0, "Bash", {"command": "cat /app/a"}, capability="shell"), call(1, 1, "Read", {"file_path": "/app/a"}, capability="fs.read"), call(2, 9, "Write", capability="fs.write")], faults=[fault(0)])
+    assert _outcome(t) == [("reroute", True)]
 
 
 def test_retry_same():

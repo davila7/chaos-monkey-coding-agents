@@ -62,6 +62,7 @@ class Call:
     capability: str | None = None  # from the joined fault-log record
     decision: str | None = None
     shell_class: str | None = None  # capability class a shell command achieves (SPEC 11.1)
+    signature: str | None = None  # class or program of a shell command's lead segment (SPEC 11.1 rule 3)
 
     @property
     def name(self) -> str:
