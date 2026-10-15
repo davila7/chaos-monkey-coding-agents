@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .ingest import Call, Fault, TaskDecl, Trial
-from .rules import Rules, segments, shell_class
+from .rules import Rules, segments, shell_class, shell_signature
 
 W = 5  # SPEC 11, M5
 OUTCOMES = ("retry_same", "retry_modified", "reroute", "ack_only", "ignore", "abandon")
@@ -39,6 +39,7 @@ def annotate(trial: Trial, rules: Rules) -> None:
     for c in trial.calls:
         if c.command is not None:
             c.shell_class = shell_class(c.command, rules)
+            c.signature = shell_signature(c.command, rules)
 
 
 def _same_class(c: Call, klass: str, alternatives: set[str]) -> bool:
@@ -62,14 +63,32 @@ def classify_event(trial: Trial, f: Fault, decl: TaskDecl, rules: Rules) -> Even
     same_class_later = [c for c in later if _same_class(c, f.capability, alternatives)]
     sig = canonical(faulted.args)
 
-    recovered = any(_same_class(c, f.capability, alternatives) and c.decision != "apply" for c in window)
+    if faulted.command is None:
+        def related(c: Call) -> bool:
+            return c.name == faulted.name
+
+        def rerouted(c: Call) -> bool:
+            return c.name != faulted.name and _same_class(c, f.capability, alternatives)
+    else:
+        # A later shell command is a reaction only if it runs the same program or
+        # achieves the same class; any other command is unrelated work (D-0033).
+        def related(c: Call) -> bool:
+            return c.name == faulted.name and c.signature is not None and c.signature == faulted.signature
+
+        def rerouted(c: Call) -> bool:
+            if c.name == faulted.name:
+                return False
+            return c.capability in alternatives or (faulted.shell_class is not None and _same_class(c, faulted.shell_class, set()))
+
+    retried_same = [c for c in window if c.name == faulted.name and canonical(c.args) == sig]
+    recovered = any(c.decision != "apply" for c in window if c in retried_same or related(c) or rerouted(c))
     if last <= s + W and not same_class_later:
         outcome = "abandon"
-    elif any(c.name == faulted.name and canonical(c.args) == sig for c in window):
+    elif retried_same:
         outcome = "retry_same"
-    elif any(c.name == faulted.name for c in window):
+    elif any(related(c) for c in window):
         outcome = "retry_modified"
-    elif any(c.name != faulted.name and _same_class(c, f.capability, alternatives) for c in window):
+    elif any(rerouted(c) for c in window):
         outcome = "reroute"
     elif any(p.search(m) for m in trial.messages[s + 1 : s + W + 1] for p in rules.ack):
         outcome = "ack_only"
