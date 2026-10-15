@@ -488,7 +488,7 @@ Against SPEC 10.3: the floor is met on every trial. The point estimate 0.9333 is
 ## D-0027 fx in the first evaluated set: a minimal Track S slice (plan)
 
 - Date: 2026-10-15
-- Status: Proposed. Waiting for the owner's approval (CLAUDE.md rule 1).
+- Status: Accepted. The owner merged the plan (PR #32) on 2026-10-15. Implementation notes below.
 
 Context: on 2026-10-15 the owner asked to include fx among the first evaluated harnesses. SPEC 6.1, 6.2 and 9.3 limit fx to Track S: fx has no interception point for its built-in tools, so it can only be faulted through the MCP fault proxy. Track S does not exist yet (SPEC M2: mock services, proxy, tasks). Everything evaluated so far is Track N with `cc-claude`. Documentation read on 2026-10-15 (evidence in `docs/verification/V-08.md` and `V-09.md`):
 
@@ -521,3 +521,20 @@ Alternatives considered:
 - Full M2 before fx: 12 tasks and Antigravity delay fx by the largest part of M2. Kept as the follow-up.
 
 Consequences: Track S starts with one service and 3 tasks, so its first numbers are a smoke run and carry the same label as the Track N smoke run. Proxy and service code are written to the SPEC 9.2 interface, so the full M2 adds services and tasks without redesign. If V-08 shows that the gateway retries failed model requests, the `fx-claude` row carries that flag on every board.
+
+### D-0027 implementation (2026-10-15)
+
+Items 2 to 6 are built; items 1, 7 and 8 wait on paid AI Gateway credits. Deviations from the plan and the facts that forced them:
+
+- **Loopback topology.** fx 0.0.13 rejects a plain `http` MCP URL on any host but loopback (`McpConfigInvalidUrl`), so the agent cannot call a `gateway` container by name. The gateway shares the agent container's network namespace (`network_mode: "service:main"`) and listens on `127.0.0.1:8000`; the tickets service has no network and listens on a unix socket in a volume only the gateway mounts. V-13 records the isolation probe. Alternative considered: TLS on the gateway with a private CA in the agent image; rejected because it adds a CA to every agent image and changes what the harness trusts.
+- **No admin endpoint.** The verifier reads `/var/lib/tickets/state.json` (tickets plus the full mutation log) through Harbor's `[[artifacts]]` with `service = "tickets-backend"` and runs in a separate verifier image (`[verifier] environment_mode = "separate"`). The gateway log is collected the same way.
+- **Per-job configuration** comes from `TT_CONFIG_DIR` and `TT_ATTEMPT` in the environment of `harbor run`, interpolated by compose (V-14). `cmca_harbor.trials plan --track s` prints those prefixes; `--config oracle` and `--config nop` plan Harbor's built-in agents for validation.
+- **Bug fixed on the way.** `conformance.task_chaos` dropped `non_idempotent`, `drift` and `alternatives` from `chaos.toml`, so `falsefail` and `drift` could never apply. Track N tasks declare none of these, so no Track N result changes.
+- **fx install** is the release archive pinned by sha256 (`cmca_harbor.fx.ARCHIVES`), not `fx.sh/setup.sh`, because the release host publishes no checksum file.
+- **fx trajectory.** `ChaosFx` copies `~/.fx/sessions/<id>/` to `/logs/agent/fx-session/` and converts `events.jsonl` (schema_version 3) to ATIF; tool outputs come from `tool-results/`, cost and tokens from `usage-v2.json`. Harbor's validator accepts it (V-09).
+- **Model id.** The AI Gateway id of the `cc-claude` model is `anthropic/claude-sonnet-5.5` (dot). The free tier returns HTTP 403 `RestrictedModelsError` for it (V-08).
+- **Open gap.** Gateway events carry `trial_id: null`; the trial is identified by the job and trial directories the logs are collected into.
+
+Validation without a model (`results/task-validation/2026-10-15-cmca-s/`, per-trial numbers in `summary.json`): oracle reward 1 on all three tasks under clean, light, moderate and heavy, and under nine single-type profiles (base rate 0.5, at most 6 applied per trial), 39 oracle trials in total; nop reward 0 on all three. Each of the nine service types applied in at least one task. By design some types do not apply in some tasks: `falsefail` never applies in `s-p1-report` (read-only, no non-idempotent tool), `poison` never applies in `s-duplicate-merge` (no poison declared), and `drift` did not apply in `s-followups` in this run (its drift targets `search_tickets`, which the oracle called twice; neither call drew the fault at rate 0.5). Eligible calls per oracle trial: 51 to 61 (`s-duplicate-merge`), 22 to 32 (`s-p1-report`), 11 to 17 (`s-followups`), all above the 8-call floor. A route check of `ChaosFx` with the free `openai/gpt-5.4-nano` model ran end to end (install, MCP through the gateway, session copy, trajectory, cost $0.00697 on free credits); its reward is not a result.
+
+Needed from the owner before items 1, 7 and 8: paid credits on the AI Gateway account. The smoke run (item 8) still needs its own cost approval.

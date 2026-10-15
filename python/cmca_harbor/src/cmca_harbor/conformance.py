@@ -96,9 +96,9 @@ def task_chaos(task_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
         "schema": raw["schema"],
         "exposure": {"expected_classes": [], **raw.get("exposure", {})},
         "poison": poison,
-        "non_idempotent": [],
-        "drift": [],
-        "alternatives": [],
+        "non_idempotent": raw.get("non_idempotent", []),
+        "drift": raw.get("drift", []),
+        "alternatives": raw.get("alternatives", []),
         "exempt": {"paths": [], **raw.get("exempt", {})},
     }
     variants = {p["variant"]: (task_dir / p["variant"]).read_text() for p in poison}

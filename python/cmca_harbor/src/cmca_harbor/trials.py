@@ -2,10 +2,18 @@
 
     python -m cmca_harbor.trials plan --config cc-claude --seed <seed> --dataset datasets/cmca-n \
         --profile clean --profile moderate --attempts 1 --build <dir> --out <dir> [--jobs jobs]
+    python -m cmca_harbor.trials plan --track s --config fx-claude --seed <seed> --dataset datasets/cmca-s \
+        --profile clean --profile moderate --attempts 1 --out <dir> [--jobs jobs]
     python -m cmca_harbor.trials archive --config cc-claude --jobs jobs --dest results/<run>
 
 One Harbor job per (profile, attempt), each running every task of the dataset
 once with `attempt_index` passed through `--ak` (V-12).
+
+On Track S the gateway in each task's compose file applies the faults, so no
+injector is uploaded. Compose reads `TT_CONFIG_DIR` and `TT_ATTEMPT` from the
+environment of `harbor run` (V-14), and each command carries them as an `env`
+prefix. `--config oracle` and `--config nop` plan Harbor's built-in agents for
+task validation.
 """
 
 import argparse
@@ -26,8 +34,15 @@ PROFILES = REPO_ROOT / "profiles"
 CONFIGS = REPO_ROOT / "configs"
 CAPABILITIES = REPO_ROOT / "capabilities"
 
+# Every service-layer type (SPEC 7.1): the gateway delivers the same bytes to
+# every harness, so Track S needs no per-harness parity set.
+TRACK_S_PARITY = ["deny", "err", "empty", "trunc", "falsefail", "poison", "drift", "latency", "rate"]
+BUILTIN_AGENTS = ("oracle", "nop")
+
 
 def load_config(config_id: str) -> dict[str, Any]:
+    if config_id in BUILTIN_AGENTS:
+        return {"harness": {"name": config_id, "version": "harbor", "harbor_agent": config_id}, "model": None}
     cfg = yaml.safe_load((CONFIGS / f"{config_id}.yaml").read_text())
     version = cfg["harness"]["version"]
     if version.startswith("<") or cfg["model"]["id"].startswith("<"):
@@ -53,7 +68,10 @@ def tasks(dataset: Path) -> list[Path]:
     return sorted(p.parent for p in dataset.glob("*/task.toml"))
 
 
-def engine_config(cfg: dict[str, Any], caps: dict[str, Any], profile: dict[str, Any], seed: str, task_dir: Path) -> dict[str, Any]:
+def engine_config(
+    cfg: dict[str, Any], caps: dict[str, Any] | None, profile: dict[str, Any], seed: str, task_dir: Path
+) -> dict[str, Any]:
+    """`caps` None means Track S: service layer, the full service parity set, no gaps."""
     task, variants = task_chaos(task_dir)
     h = cfg["harness"]
     out = {
@@ -63,11 +81,11 @@ def engine_config(cfg: dict[str, Any], caps: dict[str, Any], profile: dict[str, 
         "task_id": task_dir.name,
         "attempt": 0,
         "harness": f"{h['name']}@{h['version']}",
-        "layer": "native",
+        "layer": "native" if caps is not None else "service",
         "workspace_root": "/app",
         "profile": profile,
-        "parity_set": caps["parity_set"],
-        "parity_gaps": [{"type": g["type"], "capability": g["capability"]} for g in caps.get("parity_gaps", [])],
+        "parity_set": caps["parity_set"] if caps is not None else TRACK_S_PARITY,
+        "parity_gaps": [{"type": g["type"], "capability": g["capability"]} for g in (caps or {}).get("parity_gaps", [])],
         "catalog_version": CATALOG_VERSION,
         "task": task,
         "exempt_paths": [],
@@ -83,9 +101,10 @@ def plan(
     dataset: Path,
     profiles: list[str],
     attempts: int,
-    build: Path,
+    build: Path | None,
     out: Path,
     jobs: Path,
+    track: str = "n",
 ) -> list[list[str]]:
     """Writes `out/<profile>/<task>.json` and returns one Harbor command per (profile, attempt).
 
@@ -95,7 +114,9 @@ def plan(
     """
     cfg = load_config(config_id)
     h = cfg["harness"]
-    caps = capabilities(h["name"], h["version"])
+    if track == "n" and (config_id in BUILTIN_AGENTS or build is None):
+        raise ValueError("Track N runs need a harness config and --build")
+    caps = capabilities(h["name"], h["version"]) if track == "n" else None
     task_dirs = tasks(dataset)
     if not task_dirs:
         raise ValueError(f"{dataset}: no tasks")
@@ -107,9 +128,16 @@ def plan(
         for t in task_dirs:
             (cfg_dir / f"{t.name}.json").write_text(json.dumps(engine_config(cfg, caps, profile, seed, t), indent=2))
         for a in range(attempts):
-            argv = ["harbor", "run", "-p", str(dataset), "-a", h["harbor_agent"], "-m", cfg["model"]["id"], "-k", "1"]
-            argv += ["-o", str(jobs), "--job-name", f"{config_id}-{name}-a{a}", "-y"]
-            for k, v in (("attempt_index", a), ("tt_config_dir", cfg_dir), ("tt_build_dir", build), ("version", h["version"])):
+            argv = ["harbor", "run", "-p", str(dataset), "-a", h["harbor_agent"]]
+            if cfg["model"] is not None:
+                argv += ["-m", cfg["model"]["id"]]
+            argv += ["-k", "1", "-o", str(jobs), "--job-name", f"{config_id}-{name}-a{a}", "-y"]
+            if track == "n":
+                aks = (("attempt_index", a), ("tt_config_dir", cfg_dir), ("tt_build_dir", build), ("version", h["version"]))
+            else:
+                argv = ["env", f"TT_CONFIG_DIR={cfg_dir}", f"TT_ATTEMPT={a}", *argv]
+                aks = () if config_id in BUILTIN_AGENTS else (("attempt_index", a), ("version", h["version"]))
+            for k, v in aks:
                 argv += ["--ak", f"{k}={v}"]
             commands.append(argv)
     return commands
@@ -122,6 +150,14 @@ EVIDENCE = (
     "result.json",
     "agent/trajectory.json",
     "agent/tt/events.jsonl",
+    "agent/fx.json",
+    "agent/fx-session/events.jsonl",
+    "agent/fx-session/usage-v2.json",
+    "artifacts/var/log/tt/events.jsonl",
+    "artifacts/var/log/tt/gateway.jsonl",
+    "artifacts/var/lib/tickets/state.json",
+    "artifacts/app/STATUS.json",
+    "artifacts/app/report.json",
     "verifier/reward.txt",
     "verifier/STATUS.json",
     "verifier/check.txt",
@@ -153,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dataset", required=True, type=Path)
     p.add_argument("--profile", action="append", required=True)
     p.add_argument("--attempts", type=int, default=1)
-    p.add_argument("--build", required=True, type=Path, help="built injector layout (bin/ and the harness folder)")
+    p.add_argument("--track", choices=["n", "s"], default="n")
+    p.add_argument("--build", type=Path, help="built injector layout (bin/ and the harness folder); Track N only")
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--jobs", type=Path, default=Path("jobs"))
     a = sub.add_parser("archive", help="copy trial evidence out of the job directories")
@@ -166,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for cmd in plan(
         args.config, args.seed, args.dataset.resolve(), args.profile, args.attempts,
-        args.build.resolve(), args.out.resolve(), args.jobs,
+        args.build.resolve() if args.build else None, args.out.resolve(), args.jobs, args.track,
     ):
         print(shlex.join(cmd))
     return 0
