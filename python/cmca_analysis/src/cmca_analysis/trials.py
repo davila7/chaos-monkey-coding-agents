@@ -1,4 +1,7 @@
-"""Summary of a trial run: pass^1, fault log join, delivery reconciliation, cost (SPEC 9.7, 11).
+"""Summary of one trial run: pass^1, fault log join, delivery reconciliation, cost (SPEC 9.7, 11).
+
+Per-run pipeline check used by smoke and pilot runs; release boards come from
+`python -m cmca_analysis analyze` (D-0032).
 
     python -m cmca_analysis.trials --evidence results/<run> --out results/<run>/summary.json
 
@@ -19,35 +22,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-CATALOG_PATH = REPO_ROOT / "packages/fault-engine/catalog/v1.json"
+from .ingest import CATALOG_PATH, ELIGIBLE, read_status
+from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
+from .reconcile import delivered
 
-TEXT_TYPES = {"deny", "err", "falsefail"}
-_EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", re.I)
-STATUSES = {"success", "partial", "failure"}
 EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
-ELIGIBLE = ("pass", "apply")
-# Harnesses prefix MCP tools with the server name: `mcp__tickets__get_ticket`
-# (Claude Code), `mcp_tickets_get_ticket` (fx). The gateway logs the bare name.
-_MCP_PREFIX = re.compile(r"^mcp__?[^_]+__?")
 # Track S jobs get their profile through TT_CONFIG_DIR, which Harbor does not
 # record, so it is read from the job name `<config>-<profile>-a<attempt>`.
 _JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+$")
-
-
-def _json(path: Path) -> Any:
-    try:
-        return json.loads(path.read_text())
-    except (OSError, ValueError):
-        return None
-
-
-def _text(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    return "\n".join(p.get("text") or "" for p in content if isinstance(p, dict))
 
 
 def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any]]]:
@@ -60,32 +42,6 @@ def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[s
             args = call.get("arguments")
             out.append((call.get("function_name") or "", _text(r.get("content")) if r else "", args if isinstance(args, dict) else {}))
     return out
-
-
-def _mcp_text(observation: str) -> str:
-    """The text content of an MCP result that fx passed on as raw JSON; the input otherwise."""
-    try:
-        data = json.loads(observation)
-    except ValueError:
-        return observation
-    result = data.get("result") if isinstance(data, dict) else None
-    if not isinstance(result, dict) or not isinstance(result.get("content"), list):
-        return observation
-    return _text(result["content"])
-
-
-def delivered(fault_type: str, observation: str, payload: str, token: str | None) -> bool | None:
-    """Whether the payload reached the model; None where the trajectory alone cannot tell."""
-    if fault_type in TEXT_TYPES:
-        # fx passes the raw MCP result on, so the payload can arrive JSON-escaped.
-        return bool(payload) and (payload in observation or json.dumps(payload)[1:-1] in observation)
-    if fault_type == "empty":
-        s = _mcp_text(observation).strip()
-        return s == "" or (len(s) < 300 and bool(_EMPTY_RENDERING.search(s)))
-    if fault_type == "poison":
-        return bool(token) and token in observation
-    # trunc needs the untruncated output to compare against, which is not logged.
-    return None
 
 
 def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], tuple[Any, ...] | None]]:
@@ -129,15 +85,6 @@ def _profile(kwargs: dict[str, Any], job: str) -> str:
         return Path(str(kwargs["tt_config_dir"])).name
     m = _JOB_NAME.search(job)
     return m.group(1) if m else "none"
-
-
-def read_status(path: Path) -> str:
-    if not path.exists():
-        return "missing"
-    data = _json(path)
-    if isinstance(data, dict) and data.get("status") in STATUSES:
-        return data["status"]
-    return "invalid"
 
 
 def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:

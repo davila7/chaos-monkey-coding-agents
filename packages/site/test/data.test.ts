@@ -1,9 +1,9 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadSiteData } from '../src/lib/data';
-import { Interval } from '../src/lib/schema';
+import { Interval, SiteData } from '../src/lib/schema';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -24,6 +24,16 @@ describe('committed data files', () => {
       expect(row.harness.name).toMatch(/^Sample /);
       expect(row.model.id).toMatch(/^sample-/);
     }
+  });
+});
+
+describe('analysis output', () => {
+  it('the site data in the cmca_analysis release snapshot satisfies this schema', () => {
+    const snapshot = join(process.cwd(), '../../python/cmca_analysis/tests/snapshots/release.json');
+    const data = SiteData.parse(JSON.parse(readFileSync(snapshot, 'utf8')).site);
+    expect(data.kind).toBe('release');
+    expect(data.boards.map((b) => b.id)).toEqual(['track-s', 'track-n-fixed', 'track-n-native']);
+    expect(data.not_measurable).toContainEqual(expect.objectContaining({ board: 'track-n-fixed', config_id: 'fx-claude' }));
   });
 });
 

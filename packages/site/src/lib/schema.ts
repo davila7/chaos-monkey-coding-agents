@@ -42,6 +42,10 @@ export const Board = z.object({
 });
 export type Board = z.infer<typeof Board>;
 
+/** A config that belongs to a board's axis but cannot run on its track (D-0031 item 1). */
+export const NotMeasurable = z.object({ board: z.string(), config_id: z.string(), reason: z.string().min(1) });
+export type NotMeasurable = z.infer<typeof NotMeasurable>;
+
 export const SiteData = z.object({
   schema: z.literal('site-data/1'),
   /**
@@ -54,5 +58,6 @@ export const SiteData = z.object({
   /** Commit and path of the analysis output the file was built from. */
   source: z.string().nullable(),
   boards: z.array(Board),
+  not_measurable: z.array(NotMeasurable).default([]),
 });
 export type SiteData = z.infer<typeof SiteData>;
