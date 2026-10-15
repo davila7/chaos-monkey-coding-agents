@@ -1,0 +1,1 @@
+Use the add_comment tool of the tickets MCP server to add the comment `ready` to ticket 501. Do not use the shell or any other tool for this. If the tool reports an error, say so in your answer and stop; do not retry.
