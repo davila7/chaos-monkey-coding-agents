@@ -120,6 +120,7 @@ def task_files(root: Path, probe: Probe) -> dict[str, str]:
             'schema_version = "1.4"\n\n'
             "[task]\n"
             f'name = "cmca/{probe.task}"\n'
+            'version = "1.0.0"\n'
             f'description = "Conformance probe for {probe.capability}"\n\n'
             "[agent]\n"
             "timeout_sec = 600\n\n"
