@@ -12,7 +12,7 @@ Results and build log: [chaos-monkey-coding-agents.vercel.app](https://chaos-mon
 
 ## Status
 
-Milestone M0 (foundations). There are no tasks, runs, or results yet. Decisions taken during implementation are in [DECISIONS.md](DECISIONS.md); open verification items are in [docs/verification](docs/verification).
+M0 (foundations) is implemented and M1 (conformance and fixed-model injectors) is in progress. Native injectors for Claude Code, Pi and OpenCode pass conformance; their capability files are in `capabilities/`. Track N has 3 pilot tasks in `datasets/cmca-n`. Smoke and clean pilot runs with `cc-claude` are in `results/`; no leaderboard results are published yet. Track S does not exist yet. Decisions taken during implementation are in [DECISIONS.md](DECISIONS.md); open verification items are in [docs/verification](docs/verification).
 
 ## Development
 
@@ -33,13 +33,17 @@ Layout:
 | Path | Contents |
 |---|---|
 | `packages/fault-engine` | Fault schedule, trial state store, catalog, schemas, `tt-decide` CLI |
+| `packages/injector-claude-code`, `injector-pi`, `injector-opencode` | Native injectors for Track N |
 | `packages/cli` | `cmca` CLI (`lint` today) |
 | `packages/site` | Results site (Next.js static export for Vercel) |
-| `python/cmca_analysis` | Analysis pipeline (event log validation today) |
+| `python/cmca_harbor` | Harbor custom agents, conformance runner, trial planner |
+| `python/cmca_analysis` | Analysis pipeline (event log validation and trial summaries today) |
 | `profiles/` | Fault profiles |
 | `configs/` | Harness configurations |
-| `datasets/` | Task datasets and the canary |
-| `docs/verification/` | Evidence for third-party behavior (V-01 to V-20) |
+| `datasets/` | Task datasets, conformance probes and the canary |
+| `capabilities/` | Capability files generated from conformance |
+| `results/` | Conformance, task validation, smoke and pilot evidence |
+| `docs/verification/` | Evidence for third-party behavior (V-01 to V-21) |
 
 ## Affiliations
 
