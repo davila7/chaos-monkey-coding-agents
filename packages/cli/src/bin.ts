@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { lint } from './lint.js';
+import { bumpIssues } from './tasks.js';
 
 const [cmd, ...rest] = process.argv.slice(2);
 const rootIdx = rest.indexOf('--root');
@@ -12,6 +13,18 @@ switch (cmd) {
     const issues = lint(root);
     for (const i of issues) console.error(`${i.rule}  ${i.file}  ${i.detail}`);
     console.log(issues.length === 0 ? 'lint: ok' : `lint: ${issues.length} issue(s)`);
+    process.exit(issues.length === 0 ? 0 : 1);
+  }
+  case 'task-bump': {
+    const baseIdx = rest.indexOf('--base');
+    const base = baseIdx >= 0 ? rest[baseIdx + 1] : undefined;
+    if (!base) {
+      console.error('usage: cmca task-bump --base <git ref> [--root <dir>]');
+      process.exit(2);
+    }
+    const issues = bumpIssues(root, base);
+    for (const i of issues) console.error(`task-bump  ${i.task}  ${i.detail}`);
+    console.log(issues.length === 0 ? 'task-bump: ok' : `task-bump: ${issues.length} issue(s)`);
     process.exit(issues.length === 0 ? 0 : 1);
   }
   case 'analyze': {
@@ -26,6 +39,6 @@ switch (cmd) {
     process.exit(status);
   }
   default:
-    console.error('usage: cmca lint [--root <dir>]\n       cmca analyze --release <name> --seed <seed> --evidence <dir>... --out <dir> [--site <file>]');
+    console.error('usage: cmca lint [--root <dir>]\n       cmca task-bump --base <git ref> [--root <dir>]\n       cmca analyze --release <name> --seed <seed> --evidence <dir>... --out <dir> [--site <file>]');
     process.exit(2);
 }

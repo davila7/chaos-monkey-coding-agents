@@ -724,7 +724,7 @@ Consequences:
 ## D-0034 Task suite to the pilot quota (plan)
 
 - Date: 2026-10-15
-- Status: Proposed. Merging this entry approves the plan and the calibration budget in item 7. No model run starts before the merge.
+- Status: Accepted. The owner merged the plan (PR #42) on 2026-10-15, approving the calibration budget in item 7. Progress notes below.
 
 Context: D-0031 step 3.2. The pilot needs 12 Track N and 12 Track S tasks (SPEC 10.2) that pass the SPEC 10.3 gates and the SPEC 10.4 validation. Today there are 3 of each.
 
@@ -780,4 +780,8 @@ Consequences:
 - `n-ledger-fix` and `n-port-conflict` are likely to be revised or replaced, because both passed 5 of 5.
 - Model spend for this step is at most $100. Each round's spend and outcome go in this entry.
 - The work is long: three services, 18 tasks, CI jobs, and two calibration rounds. Each PR is reviewable on its own.
+
+Progress:
+
+- Item 4, part 1: every `task.toml` (benchmark tasks and conformance probes) carries `version = "1.0.0"` in `[task]`, which Harbor 0.24.0 reads as the package version (`PackageInfo.version`). `cmca lint` now also checks the version format, the `chaos.toml` schema, and, in the benchmark datasets (`cmca-*`), that `instruction.md` ends with the B.3 completion contract. Probes keep their own reporting instruction. `cmca task-bump --base <ref>` fails a pull request that changes a task without raising its version; CI runs it on pull requests. A task whose base copy has no version is skipped, so this change passes its own check. The task-bug issue form and the triage flow in `CONTRIBUTING.md` close D-0012 item 3.
 
