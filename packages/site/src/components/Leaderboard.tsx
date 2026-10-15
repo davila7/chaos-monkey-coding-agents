@@ -40,11 +40,71 @@ function ScoreCell({ c }: { c: Interval }) {
 
 const cell = (c: Interval | null) => (c ? pct(c.value) : '-');
 
+/** The unified view (D-0031 item 1): one row per config, Faulted Success per board side by side. */
+const ALL = 'all';
+
+function AllTracks({ data }: { data: SiteData }) {
+  const configs = new Map<string, Row>();
+  for (const b of data.boards) for (const r of b.rows) if (!configs.has(r.config_id)) configs.set(r.config_id, r);
+  const ids = [...configs.keys()].sort((a, b) => configs.get(a)!.harness.name.localeCompare(configs.get(b)!.harness.name) || a.localeCompare(b));
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Harness</th>
+            <th>Model</th>
+            {data.boards.map((b) => (
+              <th key={b.id}>{b.title}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {ids.map((id) => {
+            const r = configs.get(id)!;
+            return (
+              <tr key={id}>
+                <td>
+                  {r.harness.name}
+                  <span className="sub">{r.harness.version}</span>
+                </td>
+                <td>
+                  {r.model.id}
+                  {r.model.reasoning && <span className="sub">({r.model.reasoning})</span>}
+                </td>
+                {data.boards.map((b) => {
+                  const row = b.rows.find((x) => x.config_id === id);
+                  const missing = data.not_measurable.find((n) => n.board === b.id && n.config_id === id);
+                  return (
+                    <td key={b.id}>
+                      {row ? (
+                        <ScoreCell c={row.metrics.faulted_success} />
+                      ) : missing ? (
+                        <span className="na" title={missing.reason}>
+                          not measurable
+                          <span className="sub">{missing.reason}</span>
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function Leaderboard({ data }: { data: SiteData }) {
-  const [boardId, setBoardId] = useState(data.boards[0]?.id ?? '');
+  const [boardId, setBoardId] = useState(data.boards.length > 1 ? ALL : (data.boards[0]?.id ?? ''));
   const [view, setView] = useState<View>('table');
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'faulted', asc: false });
 
+  const all = boardId === ALL;
   const board = data.boards.find((b) => b.id === boardId) ?? data.boards[0];
   const showBands = data.kind !== 'smoke';
 
@@ -93,8 +153,13 @@ export function Leaderboard({ data }: { data: SiteData }) {
 
       <div className="toolbar">
         <div className="seg" role="group" aria-label="Board">
+          {data.boards.length > 1 && (
+            <button aria-pressed={all} onClick={() => setBoardId(ALL)}>
+              All tracks
+            </button>
+          )}
           {data.boards.map((b) => (
-            <button key={b.id} aria-pressed={b.id === board?.id} onClick={() => setBoardId(b.id)}>
+            <button key={b.id} aria-pressed={!all && b.id === board?.id} onClick={() => setBoardId(b.id)}>
               {b.title}
             </button>
           ))}
@@ -106,7 +171,7 @@ export function Leaderboard({ data }: { data: SiteData }) {
             <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11" />
           </svg>
         </a>
-        {board && board.rows.length > 0 && (
+        {!all && board && board.rows.length > 0 && (
         <div className="seg" role="group" aria-label="View">
           {(['table', 'pareto', 'curves'] as View[]).map((v) => (
             <button key={v} aria-pressed={view === v} onClick={() => setView(v)}>
@@ -117,9 +182,18 @@ export function Leaderboard({ data }: { data: SiteData }) {
         )}
       </div>
 
-      {board && <p className="board-desc">{board.description}</p>}
+      {all ? (
+        <p className="board-desc">
+          Faulted Success per board. Boards differ in where faults enter and in which fault types they compare, so columns
+          are not added up or compared across boards. Open a board for its full metrics and rank bands.
+        </p>
+      ) : (
+        board && <p className="board-desc">{board.description}</p>
+      )}
 
-      {!board || board.rows.length === 0 ? (
+      {all ? (
+        <AllTracks data={data} />
+      ) : !board || board.rows.length === 0 ? (
         <div className="table-wrap">
           <div className="empty">
             No published results yet.

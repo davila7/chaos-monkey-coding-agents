@@ -5,7 +5,7 @@ const LINKS: [string, string][] = [
   ['/#results', 'Results'],
   ['/#metrics', 'Metrics'],
   ['/capabilities/', 'Capabilities'],
-  ['/smoke/', 'Smoke run'],
+  ['/smoke/', 'Smoke runs'],
   ['/blog/', 'Blog'],
   [SPEC, 'Spec'],
 ];

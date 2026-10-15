@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { callRange, latestSmokeRun, loadSmokeRun, SmokeSummary, totalFaults } from '../src/lib/smoke';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { callRange, loadSmokeRun, smokeRuns, SmokeSummary, totalFaults } from '../src/lib/smoke';
 
 describe('committed smoke runs', () => {
-  it('2026-10-11 parses and its profile counts match its trials', () => {
-    const { summary } = loadSmokeRun('2026-10-11');
-    for (const [name, p] of Object.entries(summary.profiles)) {
-      expect(summary.trials.filter((t) => t.profile === name).length).toBe(p.trials);
+  it('every run parses and its profile counts match its trials', () => {
+    for (const { summary } of smokeRuns()) {
+      for (const [name, p] of Object.entries(summary.profiles)) {
+        expect(summary.trials.filter((t) => t.profile === name).length).toBe(p.trials);
+      }
     }
   });
 
-  it('the latest run is the newest date in data/smoke', () => {
-    expect(latestSmokeRun().date >= '2026-10-11').toBe(true);
+  it('lists every file in data/smoke, newest date first, including runs with a slug', () => {
+    const files = readdirSync(join(process.cwd(), 'data/smoke')).filter((f) => f.endsWith('.json'));
+    const runs = smokeRuns();
+    expect(runs.map((r) => `${r.id}.json`).sort()).toEqual(files.sort());
+    expect(runs.map((r) => r.id)).toContain('2026-10-15-track-s');
+    const dates = runs.map((r) => r.date);
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(loadSmokeRun('2026-10-15-track-s').source).toBe('results/smoke/2026-10-15-track-s/summary.json');
   });
 });
 
