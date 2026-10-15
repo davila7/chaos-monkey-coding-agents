@@ -3,8 +3,10 @@
     python -m cmca_analysis.trials --evidence results/<run> --out results/<run>/summary.json
 
 Reads job directories laid out as `<job>/<trial>/` with Harbor's `config.json`,
-`result.json`, `agent/trajectory.json`, `agent/tt/events.jsonl` and the
-verifier files. Output is byte-identical for identical inputs.
+`result.json`, `agent/trajectory.json`, the fault log and the verifier files.
+The fault log is `agent/tt/events.jsonl` on Track N and the gateway's
+`artifacts/var/log/tt/events.jsonl` on Track S. Output is byte-identical for
+identical inputs.
 """
 
 from __future__ import annotations
@@ -25,6 +27,12 @@ _EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", r
 STATUSES = {"success", "partial", "failure"}
 EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
 ELIGIBLE = ("pass", "apply")
+# Harnesses prefix MCP tools with the server name: `mcp__tickets__get_ticket`
+# (Claude Code), `mcp_tickets_get_ticket` (fx). The gateway logs the bare name.
+_MCP_PREFIX = re.compile(r"^mcp__?[^_]+__?")
+# Track S jobs get their profile through TT_CONFIG_DIR, which Harbor does not
+# record, so it is read from the job name `<config>-<profile>-a<attempt>`.
+_JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+$")
 
 
 def _json(path: Path) -> Any:
@@ -54,12 +62,25 @@ def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[s
     return out
 
 
+def _mcp_text(observation: str) -> str:
+    """The text content of an MCP result that fx passed on as raw JSON; the input otherwise."""
+    try:
+        data = json.loads(observation)
+    except ValueError:
+        return observation
+    result = data.get("result") if isinstance(data, dict) else None
+    if not isinstance(result, dict) or not isinstance(result.get("content"), list):
+        return observation
+    return _text(result["content"])
+
+
 def delivered(fault_type: str, observation: str, payload: str, token: str | None) -> bool | None:
     """Whether the payload reached the model; None where the trajectory alone cannot tell."""
     if fault_type in TEXT_TYPES:
-        return bool(payload) and payload in observation
+        # fx passes the raw MCP result on, so the payload can arrive JSON-escaped.
+        return bool(payload) and (payload in observation or json.dumps(payload)[1:-1] in observation)
     if fault_type == "empty":
-        s = observation.strip()
+        s = _mcp_text(observation).strip()
         return s == "" or (len(s) < 300 and bool(_EMPTY_RENDERING.search(s)))
     if fault_type == "poison":
         return bool(token) and token in observation
@@ -70,7 +91,7 @@ def delivered(fault_type: str, observation: str, payload: str, token: str | None
 def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], tuple[Any, ...] | None]]:
     by_tool: dict[str, list[tuple[Any, ...]]] = {}
     for c in calls:
-        by_tool.setdefault(c[0], []).append(c)
+        by_tool.setdefault(_MCP_PREFIX.sub("", c[0]), []).append(c)
     seen: Counter[str] = Counter()
     out = []
     for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
@@ -103,6 +124,13 @@ def poison_eligible(joined: list[tuple[dict[str, Any], tuple[Any, ...] | None]],
     return False
 
 
+def _profile(kwargs: dict[str, Any], job: str) -> str:
+    if kwargs.get("tt_config_dir"):
+        return Path(str(kwargs["tt_config_dir"])).name
+    m = _JOB_NAME.search(job)
+    return m.group(1) if m else "none"
+
+
 def read_status(path: Path) -> str:
     if not path.exists():
         return "missing"
@@ -118,6 +146,8 @@ def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dic
     kwargs = (config.get("agent") or {}).get("kwargs") or {}
     task = Path((config.get("task") or {}).get("path") or trial.name).name
     events_path = trial / "agent/tt/events.jsonl"
+    if not events_path.exists():
+        events_path = trial / "artifacts/var/log/tt/events.jsonl"
     events = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()] if events_path.exists() else []
     joined_calls = _join(events, tool_calls(_json(trial / "agent/trajectory.json")))
     joined = [(e, c[1] if c else None) for e, c in joined_calls]
@@ -140,7 +170,7 @@ def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dic
     return {
         "trial": trial.name,
         "task": task,
-        "profile": Path(str(kwargs.get("tt_config_dir") or "none")).name,
+        "profile": _profile(kwargs, trial.parent.name),
         "attempt": kwargs.get("attempt_index"),
         "reward": reward,
         "infra_failure": exc.get("exception_type") if reward is None else None,
