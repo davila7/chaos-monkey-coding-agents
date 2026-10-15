@@ -484,3 +484,22 @@ Pilot result (2026-10-14): `results/pilot/2026-10-14-cc-claude-clean-d26/` (seed
 - The one failure, `n-shipments-summary` attempt 4: the held-out check found `depots.north` off by one shipment. The agent's decoder dropped the first character of UTF-16 files after the byte order mark, so the north metadata line lost its `{`, `seq` was not read and two held-out north exports were applied first. Visible data had UTF-16 only in delimited depots, where this did not change the result; the agent's own checker run passed. Trap: UTF-16 with byte order mark. Evidence in `failure-replay.txt`.
 
 Against SPEC 10.3: the floor is met on every trial. The point estimate 0.9333 is above the 0.4 to 0.9 band; the interval contains 0.9, so this pilot does not show pass^1 above the band (the condition in Consequences is not met).
+
+## D-0028 Moderate pilot on the D-0026 tasks
+
+- Date: 2026-10-15
+- Status: Accepted (the owner approved the moderate pilot with a $10 cap on 2026-10-15, after the project audit in the shared folder `audits/2026-10-15-auditoria-proyecto.md` found nothing blocking)
+
+Context: the D-0026 clean pilot (`results/pilot/2026-10-14-cc-claude-clean-d26/`) passed 14 of 15 with every trial at or above the floor of 8 eligible calls. No real run has applied a fault yet: the smoke moderate trials applied 0 (`results/smoke/2026-10-11/summary.json`).
+
+Decision:
+
+1. Same design as the D-0026 pilot, with the `moderate` profile: `cc-claude` (Claude Code 2.1.289, `claude-sonnet-5-5`), the three D-0026 tasks, 5 attempts each (15 trials), seed `pilot-2026-10-15`.
+2. Estimate: the D-0026 pilot measured $0.4355 per trial, so $6.53 for 15 trials before any cost added by faults. Hard cap $10. Each attempt (3 trials) starts only if the cost so far plus the mean cost per attempt so far stays under the cap.
+3. The report gives pass^1 with a Wilson 95% interval per task and overall, applied faults per trial by type, and the clean versus moderate difference, labeled as a pilot (5 attempts per task cannot separate small effects).
+
+Known limits, stated in the report: exposure is almost all `shell`, so the faults that can apply are `deny`, `err`, `empty` and `trunc`; `poison` matches `fs.read` only and stays ineligible while the agent reads through Bash; `inarg` and `latency` have weight 0 (D-0005 item 4 open); `configs/cc-claude.yaml` still leaves `reasoning` at its default, the same as the clean pilot.
+
+Alternatives considered: more attempts per task (over the cap at the measured cost); the light profile (fewer applied faults, less to learn from a first faulted run).
+
+Consequences: first evidence that injected faults reach the agent in a scored run. The first trials' `events.jsonl` and trajectories are checked by hand before the numbers are reported.
