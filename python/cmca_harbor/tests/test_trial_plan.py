@@ -43,3 +43,25 @@ def test_archive_copies_only_the_evidence(tmp_path: Path):
     (tmp_path / "jobs/conf-x").mkdir()
     assert trials.archive("cc-claude", tmp_path / "jobs", tmp_path / "out") == 5
     assert not (tmp_path / "out/cc-claude-clean-a0/n-ledger-fix__a/agent/sessions").exists()
+
+
+def test_track_s_plan_uses_the_gateway_and_no_injector(tmp_path: Path):
+    dataset = REPO_ROOT / "datasets/cmca-s"
+    cmds = trials.plan("oracle", "s1", dataset, ["moderate"], 2, None, tmp_path / "out", Path("jobs"), track="s")
+    assert [c[:3] for c in cmds] == [
+        ["env", f"TT_CONFIG_DIR={tmp_path / 'out/moderate'}", "TT_ATTEMPT=0"],
+        ["env", f"TT_CONFIG_DIR={tmp_path / 'out/moderate'}", "TT_ATTEMPT=1"],
+    ]
+    assert not any(a.startswith("tt_") for c in cmds for a in c)
+    assert "-m" not in cmds[0]
+    cfg = json.loads((tmp_path / "out/moderate/s-followups.json").read_text())
+    assert cfg["layer"] == "service"
+    assert cfg["parity_set"] == trials.TRACK_S_PARITY
+    assert cfg["task"]["non_idempotent"] == [{"tool": "mcp.tickets.create_ticket"}, {"tool": "mcp.tickets.add_comment"}]
+    assert cfg["task"]["drift"] == [{"tool": "mcp.tickets.search_tickets", "kind": "wrap", "under": "data"}]
+    assert "r-7731" in cfg["variants"]["variants/ticket.json"]
+
+
+def test_track_n_refuses_builtin_agents(tmp_path: Path):
+    with pytest.raises(ValueError, match="Track N"):
+        trials.plan("oracle", "s1", DATASET, ["clean"], 1, None, tmp_path / "out", Path("jobs"))
