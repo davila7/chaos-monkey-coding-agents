@@ -622,6 +622,6 @@ Decision:
 
 Alternatives considered:
 
-- Passing the profile to Harbor as an agent kwarg on Track S: the built-in and fx agent options reject unknown kwargs. Rejected; the job name is already set by the planner.
+- Recording the profile in each gateway event: changes the `tt-event/2` schema for one field the planner already puts in the job name. Deferred to the full M2.
 
 Consequences: n = 1 per cell gives no comparison between harnesses or profiles; this run checks the Track S pipeline end to end and measures cost per trial, and carries the label "smoke run, not a benchmark result".
