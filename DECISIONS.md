@@ -613,7 +613,7 @@ Result (from `summary.json` there):
 - Moderate applied 32 faults, at least 4 per trial: err 14, trunc 9, deny 4, empty 2, falsefail 2, drift 1. All 22 faults whose delivery the trajectory can show reached the model (trunc and drift are not verifiable from the trajectory).
 - `s-p1-report` under moderate: the persistent `deny` on one ticket left both harnesses unable to read its comments. Both wrote status `partial` and named the ticket; the verifier gave reward 1.
 - `cc-claude` `s-followups` under moderate drew `falsefail` on `create_ticket`; the agent retried, the service replayed the earlier result, and the final state holds the same 5 tickets as the clean run.
-- Cost: see `settled-usage.json` for the `fx-claude` trials whose generations were still pending when fx wrote its usage file; `result.json` has no cost for those.
+- Cost: $1.3767 in total (cap $20). `cc-claude` $0.5435 ($0.0906 per trial, from `result.json`); `fx-claude` $0.8332 ($0.1389 per trial, from `settled-usage.json`). fx had generations still pending in every trial; three trials' records took up to about 35 minutes to appear on `GET /v1/generation`, longer than `ChaosFx` waits, so their `result.json` and `summary.json` carry no cost. `settled-usage.json` is the cost source for `fx-claude` in this run.
 
 Decision:
 
