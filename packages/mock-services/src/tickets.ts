@@ -1,4 +1,7 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { Clock, guarded, MutationLog, NotFound, page, type Mutation } from './common.js';
+import type { Service } from './server.js';
 
 export const STATUSES = ['open', 'pending', 'resolved', 'closed', 'duplicate'] as const;
 export const PRIORITIES = ['P1', 'P2', 'P3', 'P4'] as const;
@@ -34,22 +37,11 @@ export const FixtureSchema = z
 export type Ticket = z.infer<typeof Ticket>;
 export type Fixture = z.infer<typeof FixtureSchema>;
 
-export interface Mutation {
-  seq: number;
-  tool: string;
-  args: Record<string, unknown>;
-  replayed: boolean;
-  result: unknown;
-}
-
 export interface Snapshot {
   schema: 'tickets-state/1';
   tickets: Ticket[];
   mutations: Mutation[];
 }
-
-export class NotFound extends Error {}
-export class BadRequest extends Error {}
 
 export interface SearchArgs {
   query?: string | undefined;
@@ -63,9 +55,8 @@ export interface SearchArgs {
 /** Deterministic in-memory ticket store. All writes go through `mutate` so the audit log is complete. */
 export class TicketStore {
   private readonly tickets = new Map<number, Ticket>();
-  private readonly idem = new Map<string, unknown>();
-  private readonly mutations: Mutation[] = [];
-  private clock: number;
+  private readonly log = new MutationLog();
+  private readonly clock: Clock;
   private nextId: number;
   private nextComment = 1;
 
@@ -76,14 +67,8 @@ export class TicketStore {
       this.tickets.set(t.id, structuredClone(t));
       this.nextComment += t.comments.length;
     }
-    this.clock = Date.parse(f.now);
-    if (Number.isNaN(this.clock)) throw new Error(`invalid fixture clock ${f.now}`);
+    this.clock = new Clock(f.now);
     this.nextId = Math.max(0, ...this.tickets.keys()) + 1;
-  }
-
-  private tick(): string {
-    this.clock += 1000;
-    return new Date(this.clock).toISOString().replace('.000Z', 'Z');
   }
 
   private get(id: number): Ticket {
@@ -93,21 +78,10 @@ export class TicketStore {
   }
 
   private mutate<T>(tool: string, args: Record<string, unknown>, key: string | undefined, fn: () => T): T {
-    const scoped = key === undefined ? undefined : `${tool}\u0000${key}`;
-    if (scoped !== undefined && this.idem.has(scoped)) {
-      const result = this.idem.get(scoped) as T;
-      this.mutations.push({ seq: this.mutations.length, tool, args, replayed: true, result });
-      return result;
-    }
-    const result = fn();
-    if (scoped !== undefined) this.idem.set(scoped, result);
-    this.mutations.push({ seq: this.mutations.length, tool, args, replayed: false, result });
-    return result;
+    return this.log.run(tool, args, key, fn);
   }
 
   search(a: SearchArgs) {
-    const page = a.page ?? 1;
-    if (!Number.isInteger(page) || page < 1) throw new BadRequest('400 Bad Request: page must be a positive integer');
     const q = a.query?.toLowerCase();
     const hits = [...this.tickets.values()]
       .filter(
@@ -119,17 +93,9 @@ export class TicketStore {
           (q === undefined || t.title.toLowerCase().includes(q)),
       )
       .sort((x, y) => x.id - y.id);
-    const start = (page - 1) * PAGE_SIZE;
-    const results = hits.slice(start, start + PAGE_SIZE).map(({ id, title, status, priority, team, labels, updated_at }) => ({
-      id,
-      title,
-      status,
-      priority,
-      team,
-      labels,
-      updated_at,
-    }));
-    return { results, page, next_page: start + PAGE_SIZE < hits.length ? page + 1 : null, total: hits.length };
+    const p = page(hits, a.page, PAGE_SIZE);
+    const results = p.results.map(({ id, title, status, priority, team, labels, updated_at }) => ({ id, title, status, priority, team, labels, updated_at }));
+    return { results, page: p.page, next_page: p.next_page, total: p.total };
   }
 
   ticket(id: number): Ticket {
@@ -146,7 +112,7 @@ export class TicketStore {
     idempotency_key?: string | undefined;
   }) {
     return this.mutate('create_ticket', a, a.idempotency_key, () => {
-      const ts = this.tick();
+      const ts = this.clock.tick();
       const t: Ticket = {
         id: this.nextId++,
         title: a.title,
@@ -168,7 +134,7 @@ export class TicketStore {
   comment(a: { id: number; body: string; author?: string | undefined; idempotency_key?: string | undefined }) {
     const t = this.get(a.id);
     return this.mutate('add_comment', a, a.idempotency_key, () => {
-      const ts = this.tick();
+      const ts = this.clock.tick();
       const c = { id: `c-${this.nextComment++}`, author: a.author ?? 'agent', body: a.body, created_at: ts };
       t.comments.push(c);
       t.updated_at = ts;
@@ -182,7 +148,7 @@ export class TicketStore {
       const previous = t.status;
       if (previous !== a.status) {
         t.status = a.status;
-        t.updated_at = this.tick();
+        t.updated_at = this.clock.tick();
       }
       return { id: t.id, status: t.status, previous_status: previous };
     });
@@ -192,7 +158,82 @@ export class TicketStore {
     return {
       schema: 'tickets-state/1',
       tickets: [...this.tickets.values()].sort((x, y) => x.id - y.id).map((t) => structuredClone(t)),
-      mutations: structuredClone(this.mutations),
+      mutations: structuredClone(this.log.entries),
     };
   }
+}
+
+export function ticketsService(store: TicketStore): Service {
+  return {
+    name: 'tickets',
+    version: '1.4.2',
+    snapshot: () => store.snapshot(),
+    register(s: McpServer, write) {
+      s.registerTool(
+        'search_tickets',
+        {
+          description: `Search tickets. All filters are optional and combine with AND. Results are sorted by id, ${PAGE_SIZE} per page; follow next_page until it is null.`,
+          inputSchema: {
+            query: z.string().optional().describe('Case-insensitive substring of the title'),
+            status: z.enum(STATUSES).optional(),
+            label: z.string().optional(),
+            team: z.string().optional(),
+            priority: z.enum(PRIORITIES).optional(),
+            page: z.number().int().min(1).optional().describe('1-based page number'),
+          },
+          annotations: { readOnlyHint: true },
+        },
+        async (a) => guarded(() => store.search(a)),
+      );
+      s.registerTool(
+        'get_ticket',
+        {
+          description: 'Get one ticket with its body, customer and comments.',
+          inputSchema: { id: z.number().int().positive() },
+          annotations: { readOnlyHint: true },
+        },
+        async (a) => guarded(() => store.ticket(a.id)),
+      );
+      s.registerTool(
+        'create_ticket',
+        {
+          description:
+            'Create a ticket. Each call creates a new ticket unless idempotency_key repeats a previous create_ticket call, in which case the original result is returned.',
+          inputSchema: {
+            title: z.string().min(1),
+            body: z.string(),
+            team: z.string().optional(),
+            priority: z.enum(PRIORITIES).optional(),
+            customer: z.string().optional(),
+            labels: z.array(z.string()).optional(),
+            idempotency_key: z.string().min(1).optional(),
+          },
+        },
+        async (a) => write(() => store.create(a)),
+      );
+      s.registerTool(
+        'add_comment',
+        {
+          description:
+            'Add a comment to a ticket. Each call adds a new comment unless idempotency_key repeats a previous add_comment call, in which case the original result is returned.',
+          inputSchema: {
+            id: z.number().int().positive(),
+            body: z.string().min(1),
+            author: z.string().optional(),
+            idempotency_key: z.string().min(1).optional(),
+          },
+        },
+        async (a) => write(() => store.comment(a)),
+      );
+      s.registerTool(
+        'update_status',
+        {
+          description: 'Set the status of a ticket. Setting the current status again changes nothing.',
+          inputSchema: { id: z.number().int().positive(), status: z.enum(STATUSES) },
+          annotations: { idempotentHint: true },
+        },
+        async (a) => write(() => store.setStatus(a)),
+      );
+    },
+  };
 }

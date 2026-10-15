@@ -35,6 +35,8 @@ def changed_tasks(dataset: Path, base: str) -> list[str]:
 
 
 def commands(dataset: Path, names: list[str], out: Path, jobs: Path) -> list[list[str]]:
+    # Compose resolves a relative TT_CONFIG_DIR against the task directory, not the caller's.
+    out, jobs = out.resolve(), jobs.resolve()
     track = "s" if dataset.name.endswith("-s") else "n"
     include = [arg for n in names for arg in ("-i", n)]
     runs: list[list[str]] = []

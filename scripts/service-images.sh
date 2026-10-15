@@ -8,4 +8,6 @@ pnpm --filter @cmca/fault-engine --filter @cmca/mock-services --filter @cmca/mcp
 version=$(node -p "require('./packages/mcp-fault-proxy/package.json').version")
 docker build -q -t "tt-gateway:$version" packages/mcp-fault-proxy
 version=$(node -p "require('./packages/mock-services/package.json').version")
-docker build -q -t "tt-tickets:$version" packages/mock-services
+for service in tickets inventory deploy docs; do
+  docker build -q --build-arg "SERVICE=$service" -t "tt-$service:$version" packages/mock-services
+done

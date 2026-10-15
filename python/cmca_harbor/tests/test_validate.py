@@ -13,6 +13,14 @@ def test_track_s_runs_oracle_under_every_profile_and_nop_clean(tmp_path: Path):
     assert (tmp_path / "configs/oracle/heavy/s-followups.json").exists()
 
 
+def test_config_dir_is_absolute(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runs = validate.commands(REPO_ROOT / "datasets/cmca-s", ["s-followups"], Path("out"), Path("jobs"))
+    config_dir = next(a for a in runs[0] if a.startswith("TT_CONFIG_DIR=")).split("=", 1)[1]
+    assert config_dir == str(tmp_path / "out/configs/oracle/clean")
+    assert runs[0][runs[0].index("-o") + 1] == str(tmp_path / "jobs")
+
+
 def test_track_n_runs_plain_oracle_and_nop(tmp_path: Path):
     runs = validate.commands(REPO_ROOT / "datasets/cmca-n", ["n-ledger-fix", "n-port-conflict"], tmp_path, Path("jobs"))
     assert [r[r.index("-a") + 1] for r in runs] == ["oracle", "nop"]
