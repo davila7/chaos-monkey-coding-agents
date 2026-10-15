@@ -21,7 +21,7 @@ from typing import Any
 from cmca_harbor.common import REPO_ROOT
 from cmca_harbor.conformance import _text, catalog
 from cmca_harbor.probes import HEAD, POISON_TOKEN, TAIL, _NOTES, _canary
-from cmca_harbor.trials import engine_config, load_config
+from cmca_harbor.trials import engine_config, load_config, reasoning_kwargs
 
 DATASET = REPO_ROOT / "datasets/conformance-s"
 # The Track S tasks own the topology; probes copy it so both stay identical.
@@ -154,7 +154,8 @@ def plan(config_id: str, out: Path, jobs: Path, extra_ca_cert: str | None = None
         argv += ["-m", cfg["model"]["id"], "-k", "1", "-o", str(jobs), "--job-name", f"probe-s-{config_id}-{group}", "-y"]
         for name in names:
             argv += ["-i", name]
-        argv += ["--ak", "attempt_index=0", "--ak", f"version={h['version']}"]
+        for k, v in (("attempt_index", 0), ("version", h["version"]), *reasoning_kwargs(cfg)):
+            argv += ["--ak", f"{k}={v}"]
         if extra_ca_cert:
             argv += ["--ak", f"extra_ca_cert={extra_ca_cert}"]
         commands.append(shlex.join(argv))

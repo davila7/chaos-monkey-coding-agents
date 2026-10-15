@@ -65,3 +65,12 @@ def test_track_s_plan_uses_the_gateway_and_no_injector(tmp_path: Path):
 def test_track_n_refuses_builtin_agents(tmp_path: Path):
     with pytest.raises(ValueError, match="Track N"):
         trials.plan("oracle", "s1", DATASET, ["clean"], 1, None, tmp_path / "out", Path("jobs"))
+
+
+def test_pinned_reasoning_reaches_harbor(tmp_path):
+    from cmca_harbor.trials import load_config, reasoning_kwargs
+
+    assert reasoning_kwargs(load_config("cc-claude")) == [("reasoning_effort", "medium")]
+    assert reasoning_kwargs(load_config("fx-claude")) == [("reasoning_effort", "medium")]
+    assert reasoning_kwargs({"model": {"reasoning": "<setting>"}}) == []
+    assert reasoning_kwargs({"model": None}) == []

@@ -50,6 +50,14 @@ def load_config(config_id: str) -> dict[str, Any]:
     return cfg
 
 
+def reasoning_kwargs(cfg: dict[str, Any]) -> list[tuple[str, str]]:
+    """`reasoning_effort` for Harbor when the config pins one (D-0029)."""
+    reasoning = (cfg.get("model") or {}).get("reasoning")
+    if not reasoning or str(reasoning).startswith("<"):
+        return []
+    return [("reasoning_effort", str(reasoning))]
+
+
 def load_profile(name: str) -> dict[str, Any]:
     profile = yaml.safe_load((PROFILES / f"{name}.yaml").read_text())
     if profile.get("schema") != "tt-profile/2" or profile.get("name") != name:
@@ -137,7 +145,7 @@ def plan(
             else:
                 argv = ["env", f"TT_CONFIG_DIR={cfg_dir}", f"TT_ATTEMPT={a}", *argv]
                 aks = () if config_id in BUILTIN_AGENTS else (("attempt_index", a), ("version", h["version"]))
-            for k, v in aks:
+            for k, v in (*aks, *reasoning_kwargs(cfg)):
                 argv += ["--ak", f"{k}={v}"]
             commands.append(argv)
     return commands

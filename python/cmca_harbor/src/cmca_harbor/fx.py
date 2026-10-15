@@ -59,7 +59,9 @@ def settle_usage(snapshot: dict[str, Any], fetch: Callable[[str], dict[str, Any]
     return {"total_cost": cost, "cache_read_tokens": cached}
 
 
-def gateway_generation(api_key: str, attempts: int = 5) -> Callable[[str], dict[str, Any] | None]:
+def gateway_generation(api_key: str, attempts: int = 12, sleep: Callable[[float], None] = time.sleep) -> Callable[[str], dict[str, Any] | None]:
+    # A generation record can take minutes to appear (404 until then, V-08); the
+    # default waits about three minutes per missing record.
     def fetch(generation_id: str) -> dict[str, Any] | None:
         req = urllib.request.Request(GENERATION_URL.format(generation_id), headers={"Authorization": f"Bearer {api_key}"})
         for i in range(attempts):
@@ -67,7 +69,8 @@ def gateway_generation(api_key: str, attempts: int = 5) -> Callable[[str], dict[
                 with urllib.request.urlopen(req, timeout=30) as r:
                     return json.load(r).get("data")
             except (OSError, ValueError):
-                time.sleep(2 * (i + 1))
+                if i < attempts - 1:
+                    sleep(min(5 * (i + 1), 20))
         return None
 
     return fetch
