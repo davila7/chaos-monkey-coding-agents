@@ -4,6 +4,7 @@ import { BadRequest, Clock, Conflict, guarded, MutationLog, NotFound, type Mutat
 import type { Service } from './server.js';
 
 export const HISTORY = 5;
+export const MAX_HISTORY = 50;
 
 const DeployedService = z.object({ name: z.string(), environments: z.array(z.string()).min(1) }).strict();
 
@@ -155,7 +156,11 @@ export class DeployStore {
     });
   }
 
-  status(a: { service: string; environment?: string | undefined }) {
+  listServices() {
+    return { services: [...this.services].sort(([x], [y]) => (x < y ? -1 : 1)).map(([name, envs]) => ({ name, environments: [...envs].sort() })) };
+  }
+
+  status(a: { service: string; environment?: string | undefined; history?: number | undefined }) {
     this.env(a.service, a.environment);
     const envs = a.environment !== undefined ? [a.environment] : [...this.services.get(a.service)!].sort();
     return {
@@ -165,8 +170,8 @@ export class DeployStore {
         const live = rs.find((r) => r.status === 'live') ?? null;
         return {
           environment,
-          live: live && { release_id: live.id, build_id: live.build_id, commit: live.commit, health: live.health, created_at: live.created_at },
-          history: rs.slice(-HISTORY).reverse().map(({ id, build_id, commit, status, created_at }) => ({ release_id: id, build_id, commit, status, created_at })),
+          live: live && { release_id: live.id, build_id: live.build_id, commit: live.commit, health: live.health, created_at: live.created_at, previous_release_id: live.previous_release_id },
+          history: rs.slice(-(a.history ?? HISTORY)).reverse().map(({ id, build_id, commit, status, created_at }) => ({ release_id: id, build_id, commit, status, created_at })),
         };
       }),
     };
@@ -203,11 +208,24 @@ export function deployService(store: DeployStore): Service {
       s.registerTool(
         'status',
         {
-          description: `Show the live release and its health per environment, with the last ${HISTORY} releases newest first.`,
-          inputSchema: { service: z.string().min(1), environment: z.string().optional() },
+          description: `Show the live release per environment, with its health and the release a rollback would return to (previous_release_id), and the most recent releases newest first (${HISTORY} unless history says otherwise).`,
+          inputSchema: {
+            service: z.string().min(1),
+            environment: z.string().optional(),
+            history: z.number().int().min(1).max(MAX_HISTORY).optional().describe('How many recent releases to list per environment'),
+          },
           annotations: { readOnlyHint: true },
         },
         async (a) => guarded(() => store.status(a)),
+      );
+      s.registerTool(
+        'list_services',
+        {
+          description: 'List the deployable services and their environments.',
+          inputSchema: {},
+          annotations: { readOnlyHint: true },
+        },
+        async () => guarded(() => store.listServices()),
       );
       s.registerTool(
         'rollback',
