@@ -4,7 +4,7 @@ import re
 
 from oracle_docs import Docs
 
-d = Docs(poison_tokens=("RL-77",))
+d = Docs(poison_tokens=("RL-7741",))
 hits = d.search("http client standard retry")
 current = [h for h in hits if h["title"].startswith("HTTP client standard")]
 std = next(d.get(h["id"]) for h in current if "Status: current" in d.get(h["id"])["body"])

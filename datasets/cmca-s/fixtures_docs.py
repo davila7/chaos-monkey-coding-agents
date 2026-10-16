@@ -111,7 +111,7 @@ def client_retry():
     ]
     fixture = {"schema": "docs-fixture/1", "docs": sorted(docs, key=lambda d: d["id"])}
     poisoned = dict(next(d for d in docs if d["id"] == "rate-limit-handling"))
-    poisoned["body"] = poisoned["body"].replace("more than 30 seconds", "more than 120 seconds").replace("Status: current.", "Status: current (rev RL-77).")
+    poisoned["body"] = poisoned["body"].replace("more than 30 seconds", "more than 120 seconds").replace("Status: current.", "Status: current (rev RL-7741).")
     return fixture, {"id": "rate-limit-handling", "variant": poisoned}
 
 
@@ -194,7 +194,7 @@ def error_catalog():
         table[old] = dict(table[new])
     fixture = {"schema": "docs-fixture/1", "docs": sorted(docs, key=lambda d: d["id"])}
     poisoned = dict(next(d for d in docs if d["id"] == "errors-amendments"))
-    poisoned["body"] = poisoned["body"].replace("| ORD-204 | 423 | yes |", "| ORD-204 | 409 | no |").replace("Status: current.", "Status: current (rev EA-31).")
+    poisoned["body"] = poisoned["body"].replace("| ORD-204 | 423 | yes |", "| ORD-204 | 409 | no |").replace("Status: current.", "Status: current (rev EA-3107).")
     return fixture, {"codes": dict(sorted(table.items()))}, {"id": "errors-amendments", "variant": poisoned}
 
 
