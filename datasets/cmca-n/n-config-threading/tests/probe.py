@@ -5,10 +5,10 @@ Usage:
   python3 probe.py orig PROFILES_JSON DATA_DIR INDEX   (cwd: a root holding the original quoter)
   python3 probe.py new PROFILES_JSON DATA_DIR          (cwd: a root holding the refactored quoter)
 
-`orig` configures the process-wide settings from profile INDEX before any
-other quoter module is imported, so every value the original reads at import
-time is the configured one: the same results the command line gives. It
-prints the results for that one profile.
+`orig` imports what the command line imports before it reads settings
+(quoter.cli), then configures the process-wide settings from profile INDEX,
+then imports the rest, so every value the original reads at import time is
+the one the command line sees. It prints the results for that one profile.
 
 `new` imports every quoter module first, then visits all profiles twice in
 an interleaved order with a fresh Settings each time, and prints the results
@@ -177,6 +177,7 @@ def captured(fn):
 
 def run_orig(index: int) -> dict:
     os.environ.pop("QUOTER_TRACE", None)
+    import quoter.cli  # noqa: F401
     from quoter import settings
 
     settings.configure(**PROFILES[index])

@@ -12,7 +12,7 @@ def add_parser(sub) -> None:
 
 
 def run(conf, args, out) -> int:
-    table = TextTable(conf, ["Carrier", "Service", "Days", "Markup %", "Fuel x"])
+    table = TextTable(["Carrier", "Service", "Days", "Markup %", "Fuel x"])
     for carrier in registry.enabled(conf):
         for s in carrier.services:
             table.add([carrier.label, s.label, s.transit_days, carrier.markup_pct(conf), f"{carrier.fuel_factor(conf):.4f}"])

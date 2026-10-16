@@ -14,8 +14,17 @@ def pricing_date() -> date:
     return date.fromisoformat(_settings.SETTINGS.pricing_date)
 
 
+def _closed_days() -> frozenset:
+    """Holiday dates of the pricing year and the year after it."""
+    year = pricing_date().year
+    return frozenset(date(y, m, d) for y in (year, year + 1) for m, d in HOLIDAYS)
+
+
+CLOSED = _closed_days()
+
+
 def is_delivery_day(day: date) -> bool:
-    if (day.month, day.day) in HOLIDAYS:
+    if day in CLOSED:
         return False
     if day.weekday() == 6:
         return False

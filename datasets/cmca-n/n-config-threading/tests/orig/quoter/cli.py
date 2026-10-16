@@ -14,13 +14,12 @@ import sys
 
 from quoter import __version__, settings
 from quoter.core.errors import QuoterError
+from quoter.output.text import error_line
 
 COMMAND_MODULES = ("quote", "batch", "zones", "carriers", "settings_cmd")
 
 
 def _load_commands() -> dict:
-    # Several modules read settings when they are first imported, so the
-    # commands are imported only after configure() has run.
     import importlib
 
     return {name: importlib.import_module(f"quoter.commands.{name}") for name in COMMAND_MODULES}
@@ -74,7 +73,7 @@ def main(argv: list | None = None) -> int:
     try:
         settings.configure(**_global_values(first, os.environ))
     except QuoterError as exc:
-        sys.stderr.write(f"quoter: error: {exc}\n")
+        sys.stderr.write(error_line(exc))
         return 2
     commands = _load_commands()
     args = build_parser(commands).parse_args(argv)
@@ -82,10 +81,10 @@ def main(argv: list | None = None) -> int:
     try:
         status = module.run(args, sys.stdout)
     except QuoterError as exc:
-        sys.stderr.write(f"quoter: error: {exc}\n")
+        sys.stderr.write(error_line(exc))
         return 1
     except KeyError as exc:
-        sys.stderr.write(f"quoter: error: {exc.args[0]}\n")
+        sys.stderr.write(error_line(exc.args[0]))
         return 1
     if settings.current().debug:
         from quoter.services import cache

@@ -31,6 +31,11 @@ class TextTable:
         return "\n".join(lines) + "\n"
 
 
+def error_line(problem) -> str:
+    """The line the command line writes to stderr when it stops."""
+    return f"quoter: error: {problem}\n"
+
+
 def quotes_table(quotes: list) -> str:
     table = TextTable(["Carrier", "Service", "Delivery", "Zone", "Kg", "Net", "Gross"])
     for q in quotes:
