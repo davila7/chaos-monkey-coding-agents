@@ -842,3 +842,10 @@ Consequences:
 - Each changed task carries `version = "2.0.0"`; `cmca task-bump` enforces it.
 - Batch 1 lands in one PR per track (3 tasks each) with its validation output, then recalibration in a separate PR with the evidence and an outcome note in this entry.
 - The three valid tasks and the two in-band tasks below the floor (`n-rate-limiter`, `n-wheel-packaging`) are not in this batch. The last two need floor levers, and batch 2 takes them.
+
+Progress:
+
+- Item 2, Track S (2026-10-16): the three tasks are at 2.0.0. Oracle 1 under clean, light, moderate and heavy, and `nop` 0, for each (`results/task-validation/2026-10-16-batch1-s-*/summary.json`); each task's `shortcuts.txt` lists the shortcut attempts, all scoring 0, including a replay of round-1 agent behavior. `fixtures.py --check` passes and the other Track S tasks' generated files are unchanged.
+  - `s-client-retry`: 17 profile pages for 12 services (current, superseded, draft and withdrawn; one service with only a draft, one with only a withdrawn page); hidden cases grow from 38 to 95, covering the cap, a wait above the cap within a profile's limit, and HTTP dates in other zones and layouts. The final code of each of the five round-1 agents, rebuilt from its trajectory, scores 0. The oracle makes 31 docs calls under clean.
+  - `s-damage-claims`: two shelves are contested instead of one, because one shelf catches only one of the two wrong orders (new reports first, earlier work first); the generator asserts that both orders end with a different stock than id order. One report was recorded short and one was cancelled by a correction. The verifier counts only adjustments made during the run. The oracle makes 114 calls under clean.
+  - `s-incident-rollback`: the pre-wave rollback pair (item 2, third case) is on a service the wave did not touch, so the same service also checks that the report counts only rollbacks since the wave started. The instruction gives the wave start time. The oracle makes 61 calls under clean.
