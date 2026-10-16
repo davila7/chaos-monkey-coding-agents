@@ -12,3 +12,4 @@
 - Task versions (D-0012, D-0034): `version` in every `task.toml`, lint checks for the version, `chaos.toml` schema and completion contract, `cmca task-bump` in CI, task-bug issue form and triage in `CONTRIBUTING.md`.
 - Per-task validation without a model (D-0034): `cmca_harbor.validate` and the `task-validation` workflow (oracle under every profile on Track S, `nop`), ABC review checklist. Mock services `inventory`, `deploy` and `docs` (SPEC 9.2).
 - Track S: nine new tasks on the `inventory`, `deploy` and `docs` services, two of them across several services (D-0034 item 5); `deploy` gains `list_services` and a `status` history limit.
+- Track N: nine new tasks, two per category with the existing three (D-0034 item 5).
