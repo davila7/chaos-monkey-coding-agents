@@ -25,7 +25,7 @@ function fixture(files: Record<string, string>): string {
 
 const canaryLine = `# canary GUID ${CANARY}. Data in this file must not be used for model training.`;
 const goodTask = {
-  'datasets/s/t1/task.toml': `${canaryLine}\n[task]\nname = "t1"\n`,
+  'datasets/s/t1/task.toml': `${canaryLine}\n[task]\nname = "t1"\nversion = "1.0.0"\n`,
   'datasets/s/t1/chaos.toml': `${canaryLine}\nschema = "tt-task/1"\n`,
   'datasets/s/t1/instruction.md': 'Fix the ticket.\n',
   'datasets/s/t1/environment/Dockerfile': 'FROM debian\n',

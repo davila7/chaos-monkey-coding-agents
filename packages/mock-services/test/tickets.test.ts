@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { httpServer, TicketStore, type Fixture, type Ticket } from '../src/index.js';
+import { httpServer, TicketStore, ticketsService, type Fixture, type Ticket } from '../src/index.js';
 
 function ticket(id: number, over: Partial<Ticket> = {}): Ticket {
   return {
@@ -77,7 +77,7 @@ describe('TicketStore', () => {
 describe('MCP over streamable HTTP', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tickets-'));
   const statePath = join(dir, 'state.json');
-  const server = httpServer(new TicketStore(fixture), statePath);
+  const server = httpServer(ticketsService(new TicketStore(fixture)), statePath);
   let url: URL;
 
   beforeAll(async () => {

@@ -66,6 +66,7 @@ def task_files(root: Path, name: str) -> dict[str, str]:
     template = root / TEMPLATE.relative_to(REPO_ROOT)
     toml = (template / "task.toml").read_text()
     toml = toml.replace('name = "cmca/s-p1-report"', f'name = "cmca/{name}"')
+    toml = re.sub(r'^version = ".*"$', 'version = "1.0.0"', toml, flags=re.M)  # probes version on their own, not with the template
     toml = re.sub(r'description = ".*"', f'description = "Track S conformance probe for {probe["tool"]}"', toml)
     toml = toml.replace("timeout_sec = 1800", "timeout_sec = 600")
     toml = toml.split("\n[[artifacts]]\nsource = \"/app/STATUS.json\"")[0].rstrip() + "\n"

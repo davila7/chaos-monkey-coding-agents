@@ -3,10 +3,11 @@ import { basename, join, relative } from 'node:path';
 import { parse } from 'acorn';
 import { simple } from 'acorn-walk';
 import { loadProfile, resolveEngineConfig } from '@cmca/fault-engine';
+import { taskFileIssues, type TaskFileIssue } from './tasks.js';
 import { bannedHits } from './words.js';
 
 export interface LintIssue {
-  rule: 'banned-word' | 'canary-missing' | 'canary-leak';
+  rule: 'banned-word' | 'canary-missing' | 'canary-leak' | TaskFileIssue['rule'];
   file: string;
   detail: string;
 }
@@ -140,6 +141,8 @@ export function lint(root: string, opts: LintOptions = {}): LintIssue[] {
     .filter((f) => basename(f) === 'task.toml')
     .map((f) => join(f, '..'));
   for (const dir of taskDirs) {
+    const benchmark = basename(join(dir, '..')).startsWith('cmca-');
+    for (const i of taskFileIssues(dir, benchmark)) issues.push({ rule: i.rule, file: rel(join(dir, 'task.toml')), detail: i.detail });
     for (const f of walk(dir)) {
       const r = relative(dir, f).split('\\').join('/');
       const buf = readFileSync(f);

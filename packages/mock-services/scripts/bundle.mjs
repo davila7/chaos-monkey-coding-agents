@@ -2,8 +2,9 @@
 import { build } from 'esbuild';
 
 await build({
-  entryPoints: ['src/bin/tickets.ts'],
-  outfile: 'dist/bin/tickets.mjs',
+  entryPoints: ['tickets', 'inventory', 'deploy', 'docs'].map((name) => ({ in: `src/bin/${name}.ts`, out: name })),
+  outdir: 'dist/bin',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   format: 'esm',
   platform: 'node',

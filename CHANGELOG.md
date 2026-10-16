@@ -9,3 +9,5 @@
 - Results site and build log (D-0016, D-0018, D-0025).
 - M4 analysis (D-0032): ingest, validation, reconciliation, SPEC 11.1 and 11.2 classification, metrics M1 to M12, hierarchical bootstrap, paired permutation tests with Holm correction, rank bands, board summaries and `site-data/1` output, `cmca analyze`; V-16 closed for `cc-claude` and `fx-claude`. Site: every smoke run listed, unified All tracks view (D-0031).
 - SPEC 11.1 shell retries compare the command's class or program (D-0033). V-22 closed: fx 0.0.13 has no interception point for built-in tools.
+- Task versions (D-0012, D-0034): `version` in every `task.toml`, lint checks for the version, `chaos.toml` schema and completion contract, `cmca task-bump` in CI, task-bug issue form and triage in `CONTRIBUTING.md`.
+- Per-task validation without a model (D-0034): `cmca_harbor.validate` and the `task-validation` workflow (oracle under every profile on Track S, `nop`), ABC review checklist. Mock services `inventory`, `deploy` and `docs` (SPEC 9.2).

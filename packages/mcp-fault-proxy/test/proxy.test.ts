@@ -12,7 +12,7 @@ import {
   type FaultType,
 } from '@cmca/fault-engine';
 import catalog from '@cmca/fault-engine/catalog/v1.json' with { type: 'json' };
-import { httpServer, TicketStore, type Fixture } from '@cmca/mock-services';
+import { httpServer, TicketStore, ticketsService, type Fixture } from '@cmca/mock-services';
 import fc from 'fast-check';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
@@ -75,7 +75,7 @@ async function listen(s: Server): Promise<string> {
 
 async function stack(weights: Partial<Record<FaultType, number>> | null, rate = 1) {
   const store = new TicketStore(fixture);
-  const upstream = await listen(httpServer(store, null));
+  const upstream = await listen(httpServer(ticketsService(store), null));
   const sink = new MemorySink();
   const sleeps: number[] = [];
   const engine = weights
@@ -179,7 +179,7 @@ describe('payload cap', () => {
       ...fixture,
       tickets: [{ ...fixture.tickets[0]!, body: 'x'.repeat(70_000) }],
     });
-    const upstream = await listen(httpServer(store, null));
+    const upstream = await listen(httpServer(ticketsService(store), null));
     const events: Record<string, unknown>[] = [];
     const engine = createEngine({ config: config({ err: 1 }, 0), catalog: catalog as CatalogEntry[], store: new MemoryStateStore(), sink: new MemorySink() });
     const proxy = await listen(
@@ -245,7 +245,7 @@ describe('unix socket upstream', () => {
     expect(parseUpstream('unix:/run/tickets/tickets.sock:/mcp')).toEqual({ socketPath: '/run/tickets/tickets.sock', path: '/mcp' });
     const dir = mkdtempSync(join(tmpdir(), 'sock-'));
     const sock = join(dir, 't.sock');
-    const upstream = httpServer(new TicketStore(fixture), null);
+    const upstream = httpServer(ticketsService(new TicketStore(fixture)), null);
     servers.push(upstream);
     await new Promise<void>((done) => upstream.listen(sock, done));
     const proxy = await listen(createProxy({ upstreams: { tickets: `unix:${sock}:/mcp` } }));
