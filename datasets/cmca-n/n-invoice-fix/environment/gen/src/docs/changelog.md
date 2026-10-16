@@ -29,7 +29,8 @@ the notes are the reference.
 ## 3.2.0
 
 - Price lists from the new export are merged into the catalog without sorting
-  their tiers (`catalog.md` section 3.4).
+  their tiers (`catalog.md` section 3.4). The new export writes tier minimums
+  as strings of digits (`catalog.md` section 3.1).
 - Unit prices may have more fraction digits than the currency
   (`money.md` section 2.4, `catalog.md` section 4.2).
 

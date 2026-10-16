@@ -138,10 +138,13 @@ documents that were reviewed by hand. Run them from the package root with:
 
     python -m unittest discover -s tests -t .
 
-6.2 `tools/reconcile.py` builds every document of a data directory and
-recomputes some of their figures from the inputs. It reports, per rule, how
-many documents disagree. It covers a subset of the rules; a clean run does not
-mean every rule holds. The notes in this directory remain the reference.
+6.2 `tools/reconcile.py` builds every document of a data directory and checks
+properties that every correct document has (shares that add up, periods that
+join up, roundings within half a minor unit, totals that agree with their
+parts). It reports, per rule, how many documents break one. It does not
+recompute the documents, and it takes unit prices and tax percents from the
+documents themselves; a clean run does not mean every rule holds. The notes in
+this directory remain the reference.
 
 6.3 Neither the tests nor the reconciliation decide the rules. When a test
 and a note disagree, the note is right and the test is reported.

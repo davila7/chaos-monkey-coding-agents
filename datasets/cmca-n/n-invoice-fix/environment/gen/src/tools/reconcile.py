@@ -1,27 +1,29 @@
-"""Reconciliation of the documents the billing package builds from a data directory.
+"""Consistency checks on the documents the billing package builds from a data directory.
 
 Usage, from /app:
 
     python tools/reconcile.py [--data DIR]
 
 The tool builds every invoice and credit note in DIR (./data when left out)
-with the package, then recomputes selected figures of each document from the
-order or credit request and the document's own fields, following the docs.
-It prints, per rule, how many documents were checked and how many disagree.
-It does not say which documents or which figures disagree.
+with the package and checks properties that every correct document has: shares
+that add up, amounts that stay within their bounds, periods that join up,
+roundings that stay within half a minor unit, totals that agree with their
+parts. It prints, per rule, how many documents were checked and how many
+break a property. It does not say which documents or which figures.
 
-The checks cover a subset of the rules. Figures that a check takes from the
-document itself (the unit price a line shows, the tax percent a line shows)
-are not checked against the catalog or the tax table. Exit status 0 means no
-check failed and every document could be built, except credit requests that
-the package refuses with a credit error; those are counted on their own line.
+A document can pass every check and still be wrong: the checks take the unit
+price, the tier and the tax percent from the document itself, and they do not
+recompute any figure that more than one value would satisfy. Exit status 0
+means no check failed and every document could be built, except credit
+requests that the package refuses with a credit error; those are counted on
+their own line.
 """
 
 import argparse
-import json
+import calendar
 import sys
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
@@ -32,89 +34,75 @@ from billing.data import DataSet  # noqa: E402
 from billing.errors import BillingError, CreditError  # noqa: E402
 from billing.invoices.builder import invoice_for  # noqa: E402
 
+HALF = Decimal("0.5")
+
 RULES = [
-    ("catalog.md 4", "line gross from quantity, unit price and used days"),
-    ("subscriptions.md 2", "billing periods counted from the anchor"),
-    ("subscriptions.md 3", "used days of a period"),
-    ("discounts.md 2", "line discounts"),
-    ("discounts.md 3", "order discounts"),
-    ("discounts.md 5", "order discount shares of the lines"),
-    ("tax.md 5", "tax amounts by rounding mode"),
-    ("tax.md 7", "document totals"),
-    ("credit-notes.md 3", "credited amounts"),
+    ("catalog.md 4", "line gross within half a minor unit of price x qty"),
+    ("subscriptions.md 2", "periods on the anchor day and joined up"),
+    ("subscriptions.md 3", "used days inside the period and counted"),
+    ("discounts.md 2", "line discounts within the line"),
+    ("discounts.md 3", "order discounts within the eligible subtotal"),
+    ("discounts.md 5", "shares add up and stay near proportional"),
+    ("tax.md 5", "taxes within half a minor unit"),
+    ("tax.md 7", "totals agree with their parts"),
+    ("credit-notes.md 3", "credited units and amounts within the invoice"),
+    ("credit-notes.md 4", "credit lines keep the invoice percent"),
 ]
 
 
-def rnd(value) -> int:
-    return int(Decimal(value).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+def on_anchor_day(anchor: date, d: date, months: int) -> bool:
+    """d is in the month `months` after the anchor's, on the anchor's day or that month's last day."""
+    idx = anchor.year * 12 + anchor.month - 1 + months
+    if (d.year, d.month) != (idx // 12, idx % 12 + 1):
+        return False
+    return d.day == min(anchor.day, calendar.monthrange(d.year, d.month)[1])
 
 
-def month_end(y: int, m: int) -> int:
-    nxt = date(y + (m == 12), m % 12 + 1, 1)
-    return (nxt - timedelta(days=1)).day
+def amount_value(values: list, exp: int) -> int:
+    return sum(int(Decimal(v).scaleb(exp)) for v in values)
 
 
-def nth_start(anchor: date, n: int) -> date:
-    idx = anchor.year * 12 + anchor.month - 1 + n
-    y, m = idx // 12, idx % 12 + 1
-    return date(y, m, min(anchor.day, month_end(y, m)))
-
-
-def minor(text: str, exp: int) -> Decimal:
-    return Decimal(text).scaleb(exp)
-
-
-def apply_discounts(amount: int, discounts: list, exp: int) -> int:
-    ordered = [d for d in discounts if d["kind"] == "percent"] + [d for d in discounts if d["kind"] == "amount"]
-    for d in ordered:
-        if d["kind"] == "percent":
-            amount -= rnd(Decimal(amount) * Decimal(d["value"]) / 100)
-        else:
-            amount = max(0, amount - int(minor(d["value"], exp)))
-    return amount
-
-
-def shares(total: int, weights: list) -> list:
-    whole = sum(weights)
-    if total == 0 or whole == 0:
-        return [0] * len(weights)
-    out = [total * w // whole for w in weights]
-    rems = [total * w % whole for w in weights]
-    for i in sorted(range(len(weights)), key=lambda i: (-rems[i], i))[: total - sum(out)]:
-        out[i] += 1
-    return out
-
-
-def part(amount: int, percent: str, inclusive: bool) -> Decimal:
+def tax_of(amount: int, percent: str, inclusive: bool) -> Decimal:
     r = Decimal(percent) / 100
     return Decimal(amount) * r / (1 + r) if inclusive else Decimal(amount) * r
 
 
-def expected_taxes(lines: list, rounding: str, inclusive: bool, sign: int) -> tuple:
-    groups: dict = {}
-    line_tax = []
+def taxes_ok(lines: list, groups: list, rounding: str, inclusive: bool, sign: int) -> bool:
+    exact: dict = {}
+    summed: dict = {}
     for l in lines:
         if l["tax_percent"] is None:
-            line_tax.append(None)
+            if l["tax"] is not None:
+                return False
             continue
-        a = sign * l["amount"]
         key = (l["tax_category"], Decimal(l["tax_percent"]))
-        g = groups.get(key) or {"amount": 0, "exact": Decimal(0), "tax": 0}
-        groups[key] = g
-        g["amount"] += a
+        part = tax_of(sign * l["amount"], l["tax_percent"], inclusive)
+        exact[key] = exact.get(key, Decimal(0)) + part
         if rounding == "line":
-            t = rnd(part(a, l["tax_percent"], inclusive))
-            g["tax"] += t
-            line_tax.append(sign * t)
-        else:
-            g["exact"] += part(a, l["tax_percent"], inclusive)
-            line_tax.append(None)
-    tax = 0
-    for g in groups.values():
-        if rounding == "invoice":
-            g["tax"] = rnd(g["exact"])
-        tax += g["tax"]
-    return line_tax, sign * tax
+            if l["tax"] is None or abs(sign * l["tax"] - part) > HALF:
+                return False
+            summed[key] = summed.get(key, 0) + sign * l["tax"]
+        elif l["tax"] is not None:
+            return False
+    if len(groups) != len(exact):
+        return False
+    for g in groups:
+        key = (g["category"], Decimal(g["percent"]))
+        if key not in exact:
+            return False
+        if rounding == "line" and sign * g["tax"] != summed[key]:
+            return False
+        if rounding == "invoice" and abs(sign * g["tax"] - exact[key]) > HALF:
+            return False
+    return True
+
+
+def totals_ok(doc: dict, inclusive: bool) -> bool:
+    amounts = sum(l["amount"] for l in doc["lines"])
+    parts = doc["net"] + doc["tax"] == doc["total"]
+    parts = parts and sum(g["tax"] for g in doc["taxes"]) == doc["tax"]
+    parts = parts and doc["exempt"] + sum(g["base"] for g in doc["taxes"]) == doc["net"]
+    return parts and (doc["total"] if inclusive else doc["net"]) == amounts
 
 
 class Tally:
@@ -132,26 +120,33 @@ def check_invoice(inv: dict, order: dict, ds: DataSet, t: Tally) -> None:
     juris = ds.tax.get(inv["jurisdiction"])
     ok_gross = ok_period = ok_used = ok_line = True
     for l, src in zip(inv["lines"], order["lines"]):
-        exact = minor(l["unit_price"], exp) * l["qty"]
+        exact = Decimal(l["unit_price"]).scaleb(exp) * l["qty"]
         p = l["period"]
         sub = src.get("subscription")
         if sub:
+            if p is None:
+                ok_period = ok_used = False
+                continue
             anchor = date.fromisoformat(sub["anchor"])
             n = int(sub["period"])
-            start, nxt = nth_start(anchor, n), nth_start(anchor, n + 1)
-            end = nxt - timedelta(days=1)
-            if p is None or (p["start"], p["end"]) != (start.isoformat(), end.isoformat()):
+            start, end = date.fromisoformat(p["start"]), date.fromisoformat(p["end"])
+            if not (on_anchor_day(anchor, start, n) and on_anchor_day(anchor, end + timedelta(days=1), n + 1)):
                 ok_period = False
-            if p is not None:
-                first = max(date.fromisoformat(p["start"]), date.fromisoformat(sub.get("active_from") or p["start"]))
-                last = min(date.fromisoformat(p["end"]), date.fromisoformat(sub.get("active_to") or p["end"]))
-                days = (date.fromisoformat(p["end"]) - date.fromisoformat(p["start"])).days + 1
-                if (p["days"], p["used_days"]) != (days, (last - first).days + 1):
-                    ok_used = False
-                exact = exact * p["used_days"] / p["days"]
-        if rnd(exact) != l["gross"]:
+            first, last = date.fromisoformat(p["used_from"]), date.fromisoformat(p["used_to"])
+            want_first = max(start, date.fromisoformat(sub["active_from"])) if sub.get("active_from") else start
+            want_last = min(end, date.fromisoformat(sub["active_to"])) if sub.get("active_to") else end
+            if (first, last) != (want_first, want_last) or p["used_days"] != (last - first).days + 1 or p["days"] != (end - start).days + 1:
+                ok_used = False
+            exact = exact * p["used_days"] / p["days"]
+        if abs(exact - l["gross"]) > HALF:
             ok_gross = False
-        if apply_discounts(l["gross"], src.get("discounts") or [], exp) != l["gross"] - l["line_discount"]:
+        discounts = src.get("discounts") or []
+        if not 0 <= l["line_discount"] <= l["gross"]:
+            ok_line = False
+        if discounts and all(d["kind"] == "amount" for d in discounts):
+            if l["line_discount"] != min(l["gross"], amount_value([d["value"] for d in discounts], exp)):
+                ok_line = False
+        if l["amount"] != l["gross"] - l["line_discount"] - l["order_discount"]:
             ok_line = False
     t.add("catalog.md 4", ok_gross)
     if any(src.get("subscription") for src in order["lines"]):
@@ -160,38 +155,47 @@ def check_invoice(inv: dict, order: dict, ds: DataSet, t: Tally) -> None:
     if any(src.get("discounts") for src in order["lines"]):
         t.add("discounts.md 2", ok_line)
     eligible = [l for l in inv["lines"] if not ds.catalog.get(l["sku"]).no_discount]
+    others = [l for l in inv["lines"] if ds.catalog.get(l["sku"]).no_discount]
     after_line = [l["gross"] - l["line_discount"] for l in eligible]
+    whole = sum(after_line)
     if order.get("discounts"):
-        want = sum(after_line) - apply_discounts(sum(after_line), order["discounts"], exp)
-        t.add("discounts.md 3", want == inv["order_discount"])
-        t.add("discounts.md 5", shares(inv["order_discount"], after_line) == [l["order_discount"] for l in eligible])
-    line_tax, tax = expected_taxes(inv["lines"], juris.rounding, juris.prices_include_tax, 1)
-    t.add("tax.md 5", line_tax == [l["tax"] for l in inv["lines"]] and tax == inv["tax"])
-    amounts = sum(l["amount"] for l in inv["lines"])
-    total_ok = inv["net"] + inv["tax"] == inv["total"] and (inv["total"] == amounts if juris.prices_include_tax else inv["net"] == amounts)
-    t.add("tax.md 7", total_ok and sum(g["tax"] for g in inv["taxes"]) == inv["tax"])
+        taken = inv["order_discount"]
+        ok = 0 <= taken <= whole
+        if all(d["kind"] == "amount" for d in order["discounts"]):
+            ok = ok and taken == min(whole, amount_value([d["value"] for d in order["discounts"]], exp))
+        t.add("discounts.md 3", ok)
+        shares = [l["order_discount"] for l in eligible]
+        ok = sum(shares) == taken and all(l["order_discount"] == 0 for l in others)
+        if whole:
+            ok = ok and all(abs(s - Decimal(taken * w) / whole) < 1 for s, w in zip(shares, after_line))
+        t.add("discounts.md 5", ok)
+    t.add("tax.md 5", taxes_ok(inv["lines"], inv["taxes"], juris.rounding, juris.prices_include_tax, 1))
+    t.add("tax.md 7", totals_ok(inv, juris.prices_include_tax))
 
 
 def check_credits(docs: list, invoice: dict, ds: DataSet, t: Tally) -> None:
     juris = ds.tax.get(invoice["jurisdiction"])
     by_line = {l["line"]: l for l in invoice["lines"]}
-    done_q: dict = {}
-    done_a: dict = {}
-    for doc, req in docs:
+    units: dict = {}
+    amounts: dict = {}
+    for doc in docs:
         ok = True
-        for l, (n, q) in zip(doc["lines"], [(x["line"], x["qty"]) for x in req["lines"]]):
-            src = by_line[n]
-            if done_q.get(n, 0) + q == src["qty"]:
-                want = src["amount"] - done_a.get(n, 0)
-            else:
-                want = rnd(Decimal(src["amount"] * q) / src["qty"])
-            done_q[n] = done_q.get(n, 0) + q
-            done_a[n] = done_a.get(n, 0) + want
-            ok = ok and l["amount"] == -want
+        same_percent = True
+        for l in doc["lines"]:
+            src = by_line.get(l["line"])
+            if src is None:
+                ok = False
+                continue
+            units[l["line"]] = units.get(l["line"], 0) + l["qty"]
+            amounts[l["line"]] = amounts.get(l["line"], 0) - l["amount"]
+            ok = ok and units[l["line"]] <= src["qty"] and 0 <= -l["amount"] <= src["amount"]
+            if units[l["line"]] == src["qty"]:
+                ok = ok and amounts[l["line"]] == src["amount"]
+            same_percent = same_percent and l["tax_percent"] == src["tax_percent"]
         t.add("credit-notes.md 3", ok)
-        line_tax, tax = expected_taxes(doc["lines"], juris.rounding, juris.prices_include_tax, -1)
-        t.add("tax.md 5", line_tax == [l["tax"] for l in doc["lines"]] and tax == doc["tax"])
-        t.add("tax.md 7", doc["net"] + doc["tax"] == doc["total"] and doc["total"] <= 0)
+        t.add("credit-notes.md 4", same_percent)
+        t.add("tax.md 5", taxes_ok(doc["lines"], doc["taxes"], juris.rounding, juris.prices_include_tax, -1))
+        t.add("tax.md 7", totals_ok(doc, juris.prices_include_tax) and doc["total"] <= 0)
 
 
 def main(argv=None) -> int:
@@ -223,10 +227,10 @@ def main(argv=None) -> int:
         except BillingError:
             errors += 1
             continue
-        pending[req["invoice"]] = pending.get(req["invoice"], []) + [(doc, req)]
+        pending.setdefault(req["invoice"], []).append(doc)
     for number, docs in sorted(pending.items()):
         if number in invoices:
-            docs.sort(key=lambda d: (d[1]["date"], d[1]["number"]))
+            docs.sort(key=lambda d: (d["date"], d["number"]))
             check_credits(docs, invoices[number], ds, t)
     width = max(len(title) for _, title in RULES)
     print(f"{'rule':<20} {'':<{width}} checked  disagree")

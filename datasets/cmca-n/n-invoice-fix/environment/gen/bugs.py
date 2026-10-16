@@ -2,7 +2,9 @@
 
 Each entry is (id, file under billing/, text in src, text shipped). The ids
 group them: V entries fail the shipped unit tests, R entries pass them and
-show in tools/reconcile.py, X entries pass both and show only on other inputs.
+show in tools/reconcile.py, X entries pass both and the visible data
+exercises each at most once (build.py checks it); held-out data exercises
+them often.
 """
 
 from pathlib import Path
@@ -22,25 +24,26 @@ BUGS = [
      "            g.exact += round_minor(exact)\n"),
     ("R1", "pricing/allocation.py",
      "    for i in sorted(range(len(weights)), key=lambda i: (-remainders[i], i))[:left]:\n        shares[i] += 1\n",
-     "    if left:\n        # What the floor division leaves goes to the largest line, where it matters least.\n        biggest = max(range(len(weights)), key=lambda i: (weights[i], -i))\n        shares[biggest] += left\n"),
+     "    if left:\n        biggest = max(range(len(weights)), key=lambda i: (weights[i], -i))\n        shares[biggest] += left\n"),
     ("R2", "pricing/discounts.py",
-     "from billing.money.convert import parse_amount, percent, to_minor\n",
-     "from billing.money.convert import parse_amount, percent\n"),
-    ("R2", "pricing/discounts.py",
-     "def _step(amount: int, d: Discount, exponent: int) -> int:\n    if d.kind == \"percent\":\n        return amount - round_minor(Decimal(amount) * percent(d.value))\n    return max(0, amount - to_minor(d.value, exponent))\n",
-     "def _minor(value: str) -> int:\n    return int(parse_amount(value).scaleb(2))\n\n\ndef _step(amount: int, d: Discount, exponent: int) -> int:\n    if d.kind == \"percent\":\n        return amount - round_minor(Decimal(amount) * percent(d.value))\n    return max(0, amount - _minor(d.value))\n"),
+     "    return max(0, amount - to_minor(d.value, exponent))\n",
+     "    return max(0, amount - to_minor(d.value))\n"),
     ("R3", "periods/cycles.py",
      "    year, month = shift_month(anchor.year, anchor.month, n)\n    return date(year, month, min(anchor.day, days_in_month(year, month)))\n",
      "    start = anchor\n    for _ in range(n):\n        year, month = shift_month(start.year, start.month, 1)\n        start = date(year, month, min(start.day, days_in_month(year, month)))\n    return start\n"),
+    # The loader sorts the raw entries by min_qty as written: numbers sort as
+    # numbers, strings of digits sort as text ("10" before "5").
     ("X1", "catalog/tiers.py",
-     "    # Kept in file order; select_tier does not depend on it.\n",
-     "    # Kept in file order.\n"),
+     "    for item in raw:\n        try:\n            t = Tier(",
+     "    for item in sorted(raw, key=lambda item: item[\"min_qty\"]):\n        try:\n            t = Tier("),
     ("X1", "catalog/tiers.py",
-     '    """The tier with the largest minimum quantity that qty reaches."""\n    best = None\n    for t in tiers:\n        if t.min_qty <= qty and (best is None or t.min_qty > best.min_qty):\n',
-     '    """The tier that applies to qty."""\n    best = None\n    for t in tiers:\n        if t.min_qty <= qty:\n'),
+     "    return tuple(sorted(tiers, key=lambda t: t.min_qty))\n",
+     "    return tuple(tiers)\n"),
+    # Without the copies a refused request leaves the units and amounts of its
+    # lines before the failing one in the running totals of later requests.
     ("X2", "credits/notes.py",
-     '    percents = [juris.rate_on(src["tax_category"], parse_date(invoice["date"])) for src, _, _ in out]\n',
-     '    percents = [juris.rate_on(src["tax_category"], req.date) for src, _, _ in out]\n'),
+     "    done_qty = dict(done_qty)\n    done_amount = dict(done_amount)\n",
+     ""),
 ]
 
 
