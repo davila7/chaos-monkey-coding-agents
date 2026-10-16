@@ -24,11 +24,18 @@ MONTH = "2026-03"
 PRE = 110      # commits from the first import to v2.3.0
 RANGE = 180    # commits from v2.3.0 to v2.4.0
 POST = 14      # commits after v2.4.0
+# The user's ledger covers about a year, so one report run takes seconds and a run at every commit of
+# the range does not fit in one shell call. Only rows written within a day of the month can be booked
+# in it under either release, so the story check below runs on those rows.
+LEDGER_START = date(2025, 4, 14)
+LEDGER_END = date(2026, 4, 12)
+ROWS_PER_DAY = 1300
+NEAR_MONTH = (date(2026, 2, 27), date(2026, 4, 2))
 # Planted commits, as positions after v2.3.0.
 EVENTS = {
     20: "bom", 35: "release:2.3.1", 40: "export_header", 58: "month_bounds", 63: "blank", 70: "grouping",
     78: "release:2.3.2", 84: "move_rates", 97: "fix_import", 100: "amount_bug", 105: "upper_currency",
-    46: "parse_dt", 88: "parse_dtz", 112: "amount_fix", 116: "export_seconds", 121: "culprit", 127: "offsets_note", 140: "release:2.4.0rc1", 150: "memo",
+    46: "parse_dt", 88: "parse_dtz", 112: "amount_fix", 114: "stamp", 116: "export_seconds", 121: "culprit", 127: "offsets_note", 140: "release:2.4.0rc1", 150: "memo",
     RANGE: "release:2.4.0",
 }
 PRE_RELEASES = {40: "2.1.0", 75: "2.2.0", 92: "2.2.1", PRE: "2.3.0"}
@@ -241,14 +248,21 @@ def planted(state, event):
     if event == "amount_fix":
         state["amount"] = "fixed"
         return "Keep parenthesized amounts negative", "The sign check ran after the parentheses were stripped."
+    if event == "stamp":
+        state["parse_when"] = "stamp"
+        state["dates"] = "stamp"
+        return ("Parse when values in tally.dates",
+                "parse_stamp reads the text as written; to_instant builds on it for the exports.")
     if event == "culprit":
-        state["parse_when"] = "utc"
+        state["parse_when"] = "shared"
+        state["dates"] = "utc"
         state["report_rename"] = True
         state["test_readers_z"] = True
         changelog_add(state, "Internal: one timestamp parser for imports and exports.")
         return ("Share timestamp parsing between readers and exports",
-                "The CSV export already parses with tally.dates.to_instant; use it in the readers too instead\n"
-                "of a second ISO 8601 parser, and give the report accumulator a clearer name.")
+                "parse_stamp and to_instant read the same text in two ways; keep one parser in tally.dates.\n"
+                "parse_when builds the booking date from the parsed stamp, and the report accumulator gets a\n"
+                "clearer name.")
     if event == "offsets_note":
         state["offsets_note"] = True
         return "Docs: give examples of offsets in the when column", ""
@@ -318,13 +332,13 @@ def build_history(repo):
 def ledger(rng):
     offsets = ["-08:00", "-07:00", "-05:00", "-04:00", "+00:00", "+01:00", "+05:30", "Z"]
     rows = ["id,when,account,amount,currency,memo"]
-    day = date(2026, 2, 16)
+    day = LEDGER_START
     n = 0
     memos = ["fuel", "hotel", "client lunch", "software", "freight", "courier", "parts", "repairs", "rent",
              "utilities", "conference", "training", "cloud hosting", "printing", "taxi", "refund"]
-    while day <= date(2026, 4, 12):
+    while day <= LEDGER_END:
         edge = day.day in (1, 28, 31) or (day.month == 3 and day.day == 1)
-        for _ in range(rng.randint(28, 40) + (18 if edge else 0)):
+        for _ in range(rng.randint(ROWS_PER_DAY - 80, ROWS_PER_DAY + 80) + (ROWS_PER_DAY // 2 if edge else 0)):
             n += 1
             acct = rng.choice(ACCOUNTS)
             r = rng.random()
@@ -346,7 +360,7 @@ def ledger(rng):
                 memo = "reversal"
             if "," in text:
                 text = f'"{text}"'
-            rows.append(f"T{n:05d},{when},{acct},{text},USD,{memo}")
+            rows.append(f"T{n:06d},{when},{acct},{text},USD,{memo}")
         day += timedelta(days=1)
     return "\n".join(rows) + "\n"
 
@@ -367,18 +381,43 @@ def numbers(text):
     return out
 
 
-def check_story(h, base, ledger_path):
+def near_month(ledger_path, near_path):
+    near_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ledger_path.read_text().splitlines(keepends=True)
+    lo, hi = (d.isoformat() for d in NEAR_MONTH)
+    near_path.write_text(lines[0] + "".join(line for line in lines[1:] if lo <= line.split(",")[1][:10] <= hi))
+
+
+def check_story(h, base, ledger_path, near_path):
     repo = h.repo
+    near_month(ledger_path, near_path)
     outputs = {}
     for pos in range(0, RANGE + 1):
         sha = h.commits[base + pos][0]
         h.git("checkout", "-q", sha)
-        out, err = run_report(repo, ledger_path, h.env)
+        out, err = run_report(repo, near_path, h.env)
         outputs[pos] = (out, err)
     good = numbers(outputs[0][0])
     bad = numbers(outputs[RANGE][0])
     assert good != bad
     culprit = next(p for p, e in EVENTS.items() if e == "culprit")
+    # The full ledger gives the same output as the rows near the month.
+    full = {}
+    for pos in (0, culprit - 1, culprit, RANGE):
+        h.git("checkout", "-q", h.commits[base + pos][0])
+        full[pos] = run_report(repo, ledger_path, h.env)
+        assert full[pos] == outputs[pos], pos
+    # The culprit's dates.py change alone causes the regression; its parse_when refactor changes no totals.
+    sha = h.commits[base + culprit][0]
+    changed = h.git("diff-tree", "--no-commit-id", "--name-only", "-r", sha).split()
+    assert {"tally/dates.py", "tally/io/readers.py", "tally/report.py"} <= set(changed), changed
+    for rel in changed:
+        h.git("checkout", "-q", "-f", sha)
+        h.git("checkout", "-q", sha + "^", "--", rel)
+        out, err = run_report(repo, near_path, h.env)
+        assert out is not None, (rel, err)
+        assert numbers(out) == (good if rel == "tally/dates.py" else bad), rel
+    h.git("checkout", "-q", "-f", sha)
     for pos, (out, err) in outputs.items():
         if 84 <= pos < 97:
             assert out is None and "ModuleNotFoundError" in err, pos
@@ -399,7 +438,7 @@ def check_story(h, base, ledger_path):
                            env=dict(h.env, PYTHONDONTWRITEBYTECODE="1"), capture_output=True, text=True)
         assert (p.returncode == 0) == ok, (pos, p.stderr[-800:])
     h.git("checkout", "-q", "main")
-    return outputs
+    return full
 
 
 def issue_text(good_out, bad_out):
@@ -431,7 +470,7 @@ same command, same machine. We did not try the releases in between.
 
 
 def main():
-    out = Path(sys.argv[1])
+    out = Path(sys.argv[1]).resolve()
     if out.exists():
         raise SystemExit(f"{out} exists")
     work = out.parent / (out.name + ".work")
@@ -443,7 +482,7 @@ def main():
     reports.mkdir(parents=True)
     (reports / "ledger.csv").write_text(ledger(rng))
     h, base = build_history(work / "repo")
-    outputs = check_story(h, base, reports / "ledger.csv")
+    outputs = check_story(h, base, reports / "ledger.csv", work / "home" / "near-month.csv")
     (reports / "issue.md").write_text(issue_text(outputs[0][0], outputs[RANGE][0]))
     # The index holds file times; rebuild it without them so two builds give the same bytes.
     (h.repo / ".git" / "index").unlink()
