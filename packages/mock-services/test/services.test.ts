@@ -41,7 +41,7 @@ describe('MCP tool sets (SPEC 9.2)', () => {
     const store = new DeployStore({ schema: 'deploy-fixture/1', now: '2026-09-10T12:00:00Z', services: [{ name: 'api', environments: ['prod'] }], builds: [], releases: [], failing_commits: [], degraded_commits: [] });
     const state = join(dir, 'deploy.json');
     await withClient(deployService(store), state, async (c) => {
-      expect((await c.listTools()).tools.map((t) => t.name).sort()).toEqual(['build', 'deploy', 'rollback', 'status']);
+      expect((await c.listTools()).tools.map((t) => t.name).sort()).toEqual(['build', 'deploy', 'list_services', 'rollback', 'status']);
       const b = JSON.parse(text(await c.callTool({ name: 'build', arguments: { service: 'api', commit: 'abcdef0' } })));
       await c.callTool({ name: 'deploy', arguments: { service: 'api', environment: 'prod', build_id: b.build_id } });
     });

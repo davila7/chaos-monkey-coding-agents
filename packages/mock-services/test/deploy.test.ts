@@ -21,6 +21,10 @@ const fixture: DeployFixture = {
 };
 
 describe('DeployStore', () => {
+  it('lists services and environments', () => {
+    expect(new DeployStore(fixture).listServices()).toEqual({ services: [{ name: 'api', environments: ['prod', 'staging'] }, { name: 'web', environments: ['prod'] }] });
+  });
+
   it('caches builds per service and commit and fails listed commits', () => {
     const s = new DeployStore(fixture);
     expect(s.build({ service: 'api', commit: 'ccccccc' })).toEqual({ build_id: 'b-3', service: 'api', commit: 'ccccccc', status: 'succeeded', cached: false });
@@ -36,8 +40,9 @@ describe('DeployStore', () => {
     expect(s.deploy({ service: 'api', environment: 'prod', build_id })).toMatchObject({ release_id: 'r-3', previous_release_id: 'r-2' });
     expect(s.deploy({ service: 'api', environment: 'prod', build_id })).toMatchObject({ release_id: 'r-4', previous_release_id: 'r-3' });
     const prod = s.status({ service: 'api', environment: 'prod' }).environments[0]!;
-    expect(prod.live).toMatchObject({ release_id: 'r-4', health: 'degraded' });
+    expect(prod.live).toMatchObject({ release_id: 'r-4', health: 'degraded', previous_release_id: 'r-3' });
     expect(prod.history.map((h) => [h.release_id, h.status])).toEqual([['r-4', 'live'], ['r-3', 'superseded'], ['r-2', 'superseded'], ['r-1', 'superseded']]);
+    expect(s.status({ service: 'api', environment: 'prod', history: 2 }).environments[0]!.history).toHaveLength(2);
     expect(s.status({ service: 'api' }).environments.map((e) => [e.environment, e.live])).toEqual([['prod', expect.anything()], ['staging', null]]);
   });
 
