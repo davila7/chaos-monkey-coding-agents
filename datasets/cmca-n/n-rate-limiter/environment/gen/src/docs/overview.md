@@ -30,6 +30,7 @@ The package uses only the Python standard library (Python 3.12).
       timeutil.py       trace timestamps
       config/           loading the configuration; one module per section
       http/             headers, paths, the access log client address
+      ratelimit/        helpers of the rate limiting stage (release 2.7)
       routing/          route matching
       stages/           one module per stage, and the stage list
       trace/            reading trace files
@@ -41,9 +42,9 @@ The package uses only the Python standard library (Python 3.12).
 
 ## Releases
 
-- 2.7 (planned): rate limiting (`ratelimit.md`). `configs/edge.toml` already
-  carries the limits that production will run with, so `check` and `replay`
-  refuse it until the stage exists.
+- 2.7 (in progress): rate limiting (`ratelimit.md`). Part of it has landed;
+  the stage itself is not in the stage list yet. `configs/edge.toml` already
+  carries the limits that production will run with.
 - 2.6: `[upstream] timeout`; route `status`.
 - 2.5: `routes` command; public routes.
 - 2.4: `summary.json` gets per-route counts.

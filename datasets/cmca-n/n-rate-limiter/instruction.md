@@ -1,4 +1,4 @@
-The `frontdoor` package in /app decides what the edge does with each incoming request; `python -m frontdoor replay` runs it offline over captured traces. Release 2.7 adds rate limiting: implement the `ratelimit` stage and its configuration sections as specified in /app/docs/ratelimit.md. Read /app/docs/overview.md and /app/docs/conventions.md first for how the code is organised.
+The `frontdoor` package in /app decides what the edge does with each incoming request; `python -m frontdoor replay` runs it offline over captured traces. Release 2.7 adds rate limiting, specified in /app/docs/ratelimit.md. An earlier change already landed part of that work, with unit tests; nobody has checked it against the specification yet. Finish the release: the `ratelimit` stage must work as the specification says, including the parts that are already there. Read /app/docs/overview.md and /app/docs/conventions.md first for how the code is organised.
 
 Put all code under /app/frontdoor. The unit tests run from /app with:
 
