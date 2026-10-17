@@ -15,3 +15,4 @@
 - Track N: nine new tasks, two per category with the existing three (D-0034 item 5).
 - Calibration round 1 (D-0034 item 6): 24 tasks, `cc-claude` clean, 5 attempts each, evidence in `results/calibration/`.
 - Hardening batch 1 (D-0035): `s-client-retry`, `s-damage-claims`, `s-incident-rollback`, `n-invoice-fix`, `n-config-threading` and `n-bisect-regression` at 2.0.0.
+- SPEC 10.3: the difficulty band becomes a lower bound of 0.4 clean pass^1 for the reference config, with no upper bound (D-0036).
