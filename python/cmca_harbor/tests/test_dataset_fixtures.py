@@ -18,8 +18,9 @@ def _without_canary(data: bytes) -> bytes:
 
 
 def test_verifier_copies_of_generators_match():
-    """n-wheel-packaging keeps a canary-marked copy of environment/gen under tests/gen; they must not drift."""
-    for task in sorted((REPO_ROOT / "datasets").glob("cmca-*/*")):
+    """Tasks that keep a canary-marked copy of environment/gen under tests/gen; they must not drift."""
+    tasks = [*(REPO_ROOT / "datasets").glob("cmca-*/*"), *(REPO_ROOT / "datasets").glob("cmca-*/reserve/*")]
+    for task in sorted(tasks):
         src, copy = task / "environment" / "gen", task / "tests" / "gen"
         if not (src.is_dir() and copy.is_dir()):
             continue
