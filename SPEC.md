@@ -620,7 +620,7 @@ Pilot: 12 tasks per track. v1.0: 40 tasks per track.
 
 - Original tasks only. Do not copy from public benchmarks. An optional derived track from Terminal-Bench 2.0 tasks is allowed only after license review `[VERIFY V-18]`.
 - **Exposure floor.** In clean pilot runs, the reference config makes at least 8 eligible tool calls on the task, so the `moderate` profile produces about one to two faults per trial. Tasks below the floor are revised or moved to the reserve pool.
-- **Difficulty band.** Clean pass^1 for the reference config between 0.4 and 0.9 in pilot calibration. Tasks outside the band are revised or moved to the reserve pool.
+- **Difficulty lower bound.** Clean pass^1 for the reference config of at least 0.4 in pilot calibration. Tasks below it are revised or moved to the reserve pool. There is no upper bound; the analysis reports clean pass^1 per task so saturation is visible (D-0036).
 - **Deterministic verifiers.** Tests check final state (files, service state, `STATUS.json`), never the transcript. No LLM judges in outcomes.
 - **No shortcuts.** Tests are not in the image. Answers cannot be derived from the environment without doing the work. Services hold the ground truth behind an admin endpoint the agent cannot reach.
 - **Declarations in `chaos.toml`:** poisonable resources with their poisoned variant and canary token, non-idempotent tools, drift variants, and alternatives for outage faults.
@@ -634,7 +634,7 @@ Pilot: 12 tasks per track. v1.0: 40 tasks per track.
 4. `nop` scores 0.
 5. Track S: oracle under faults passes for every profile.
 6. Human review using the checklist in `docs/review-checklist.md` (derived from ABC, section 13.1). The reviewer signs off in the PR.
-7. Pilot calibration (exposure floor and difficulty band).
+7. Pilot calibration (exposure floor and difficulty lower bound).
 
 ### 10.5 Splits
 
@@ -695,7 +695,7 @@ Flag any shell command or tool call within 10 steps after a fault event that mat
 
 | ABC area | Risk | CMCA measure |
 |---|---|---|
-| Task validity | Task unsolvable or solvable without the target capability | Oracle under clean and under faults; `nop` scores 0; exposure floor; difficulty band; human review |
+| Task validity | Task unsolvable or solvable without the target capability | Oracle under clean and under faults; `nop` scores 0; exposure floor; difficulty lower bound; human review |
 | Task validity | Environment leaks the answer | Tests outside the image; separate verifier; admin endpoints unreachable from the agent |
 | Task validity | Faults make tasks unsolvable | Caps, bounded persistence, outage only with declared alternatives |
 | Outcome validity | Weak or gameable verifiers | Deterministic state checks; reviewer checklist; regrade on fixes |
