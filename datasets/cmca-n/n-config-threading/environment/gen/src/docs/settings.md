@@ -28,6 +28,9 @@ them is reported then, with exit status 1.
 
 ## Settings
 
+Where this table and the command line disagree, the command line is the
+reference.
+
 | Name | Type | Fallback | Meaning |
 |---|---|---|---|
 | `currency` | text | `EUR` | Currency of the `gross_local` amount of every quote. Prices are computed in EUR and converted at the end. |

@@ -14,6 +14,7 @@ class Tier:
 
 
 def parse_tiers(raw: list, where: str) -> tuple[Tier, ...]:
+    """The tiers of one currency, sorted by minimum quantity."""
     if not raw:
         raise DataError(f"{where}: no price tiers")
     tiers = []
@@ -30,16 +31,16 @@ def parse_tiers(raw: list, where: str) -> tuple[Tier, ...]:
         parse_amount(t.unit_price)
         seen.add(t.min_qty)
         tiers.append(t)
-    # Kept in file order; select_tier does not depend on it.
-    return tuple(tiers)
+    return tuple(sorted(tiers, key=lambda t: t.min_qty))
 
 
 def select_tier(tiers: tuple[Tier, ...], qty: int) -> Tier:
-    """The tier with the largest minimum quantity that qty reaches."""
+    """The tier with the largest minimum quantity that qty reaches; tiers come from parse_tiers."""
     best = None
     for t in tiers:
-        if t.min_qty <= qty and (best is None or t.min_qty > best.min_qty):
-            best = t
+        if t.min_qty > qty:
+            break
+        best = t
     if best is None:
         raise PricingError(f"quantity {qty} is below every tier minimum")
     return best

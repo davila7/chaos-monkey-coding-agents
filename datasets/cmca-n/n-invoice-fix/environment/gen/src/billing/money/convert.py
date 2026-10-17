@@ -26,7 +26,7 @@ def parse_amount(text: str) -> Decimal:
     return Decimal(t)
 
 
-def to_minor(text: str, exponent: int) -> int:
+def to_minor(text: str, exponent: int = 2) -> int:
     """Exact amount string -> int minor units; rejects digits below the minor unit."""
     scaled = parse_amount(text).scaleb(exponent)
     if scaled != scaled.to_integral_value():

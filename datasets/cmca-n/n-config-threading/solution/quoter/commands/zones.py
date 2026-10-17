@@ -20,7 +20,7 @@ def run(conf, args, out) -> int:
         countries.get(code)
     except KeyError as exc:
         raise QuoteError(str(exc.args[0])) from None
-    table = TextTable(conf, ["Code", "Country", "Zone"])
+    table = TextTable(["Code", "Country", "Zone"])
     for dest, zone in zones.zones_from(conf, code):
         if args.zone is not None and zone != args.zone:
             continue

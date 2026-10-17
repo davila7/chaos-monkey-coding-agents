@@ -32,7 +32,9 @@ prices of a subscription are prices per seat for one full billing period.
 
 3.1 A tier has a minimum quantity `min_qty` (a whole number, at least 1) and a
 `unit_price` (an amount string, `money.md` section 2). Within one currency of
-one product no two tiers have the same minimum.
+one product no two tiers have the same minimum. Price list exports differ in
+how they write the minimum: as a JSON number (`10`) or as a string of digits
+(`"10"`). Both mean the same quantity.
 
 3.2 Tiers are **all-units** tiers: the tier that applies to a line sets the
 unit price of every unit on the line, not only of the units above its minimum.

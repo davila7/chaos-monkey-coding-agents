@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import configparser
 from dataclasses import dataclass, fields
+from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from quoter.core.errors import SettingsError
@@ -98,6 +99,8 @@ def parse_value(name: str, raw):
                 raise ValueError(unknown)
         else:
             value = str(raw).strip()
+            if name == "pricing_date":
+                date.fromisoformat(value)
     except (ValueError, InvalidOperation, TypeError):
         raise SettingsError(f"invalid value for {name}: {raw!r}") from None
     if name in CHOICES and value not in CHOICES[name]:

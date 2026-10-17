@@ -62,6 +62,7 @@ def initial_state():
         "readers_upper_currency": False,
         "readers_memo_strip": False,
         "parse_when": "local",
+        "dates": "v1",
         "amount": "v1",
         "rates_path": "tally",
         "report_import": "tally",
@@ -181,8 +182,8 @@ def r_readers(s):
     dt_import = "from datetime import date, datetime" if s["parse_when"] in ("dt", "dtz") else "from datetime import date"
     imports = ["import csv", "from dataclasses import dataclass", dt_import,
                "from decimal import Decimal", "", "from tally.accounts import canonical"]
-    if s["parse_when"] == "utc":
-        imports.append("from tally.dates import to_instant")
+    if s["parse_when"] in ("stamp", "shared"):
+        imports.append("from tally.dates import parse_stamp")
     imports.append("from tally.money import parse_amount")
     if s["parse_when"] == "local":
         pw = '''def parse_when(text):
@@ -202,10 +203,16 @@ def r_readers(s):
         text = text[:-1]
     return datetime.fromisoformat(text).date()
 '''
+    elif s["parse_when"] == "stamp":
+        pw = '''def parse_when(text):
+    """Booking date of a row: the date part of the written date or date-time."""
+    return parse_stamp(text).date()
+'''
     else:
         pw = '''def parse_when(text):
     """Booking date of a row."""
-    return to_instant(text).date()
+    stamp = parse_stamp(text)
+    return date(stamp.year, stamp.month, stamp.day)
 '''
     enc = "utf-8-sig" if s["readers_bom"] else "utf-8"
     blank = ('            if not any((v or "").strip() for v in rec.values()):\n                continue\n'
@@ -292,18 +299,54 @@ def format_amount(value, grouping=False):
 '''
 
 
-def r_dates(s):
-    return f'''"""Date and time helpers."""
-from datetime import datetime, timezone
+DATES_PARSE = {
+    "v1": '''
+
+def to_instant(text):
+    """@DOC@"""
+    dt = datetime.fromisoformat(text.strip())
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+''',
+    "stamp": '''
+
+def parse_stamp(text):
+    """Date-time of an ISO 8601 date or date-time as written; a date alone is midnight, an offset is kept."""
+    text = text.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    return datetime.fromisoformat(text)
 
 
 def to_instant(text):
-    """{doc(s, "to_instant")}"""
+    """@DOC@"""
+    dt = parse_stamp(text)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+''',
+    "utc": '''
+
+def parse_stamp(text):
+    """Date-time of an ISO 8601 date or date-time; naive values are read as UTC."""
     dt = datetime.fromisoformat(text.strip())
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
+
+def to_instant(text):
+    """@DOC@"""
+    return parse_stamp(text)
+''',
+}
+
+
+def r_dates(s):
+    return f'''"""Date and time helpers."""
+from datetime import datetime, timezone
+{DATES_PARSE[s["dates"]].replace("@DOC@", doc(s, "to_instant"))}
 
 def month_of(d):
     """{doc(s, "month_of")}"""

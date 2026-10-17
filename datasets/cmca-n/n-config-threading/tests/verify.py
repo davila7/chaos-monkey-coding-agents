@@ -41,6 +41,7 @@ PROFILES = [
     {"pricing_date": "2026-12-24", "saturday_delivery": "no", "surcharge_peak": "3", "dim_divisor": "6000", "cache_enabled": "yes", "fx_margin": "0"},
     {"carriers": "ground", "fuel_pct": "0", "rate_card": "2026", "tax_rate": "0.25", "label_format": "long", "line_width": "90"},
     {"pricing_date": "2026-11-16", "currency": "GBP", "surcharge_remote": "0"},
+    {"pricing_date": "2025-12-22", "rounding": "half_even", "round_step": "0.10", "line_width": "64", "carriers": "freight,ground,express"},
 ]
 
 
@@ -63,6 +64,7 @@ def make_data() -> dict:
     files = {}
     for i, profile in enumerate(PROFILES[1:8], start=1):
         files[f"p{i}"] = write(f"held-{i}.ini", samples.settings_file(profile, f"held profile {i}"))
+    files["p8"] = write("held-8.ini", samples.settings_file(PROFILES[13], "held profile 8"))
     files["bad-ini"] = write("bad.ini", "[quoter]\nunits = stone\n")
     files["broken-ini"] = write("broken.ini", "units = metric\n[quoter\n")
     files["other-ini"] = write("other.ini", "[other]\ncurrency = USD\n")
@@ -76,7 +78,7 @@ def commands(f: dict) -> list:
     out = []
     for fmt in ("text", "detail", "csv", "json", "label"):
         out.append(([*q, "--format", fmt], {}))
-    for key in ("p1", "p2", "p3", "p4", "p5", "p6", "p7"):
+    for key in ("p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"):
         out.append((["--config", f[key], *q2, "--format", "detail"], {}))
         out.append((["--config", f[key], "batch", f"{d}/held-1.csv"], {}))
     out += [
@@ -124,7 +126,13 @@ def commands(f: dict) -> list:
         (["batch", f"{d}/nope.csv"], {}),
         (["zones", "zz"], {}),
         (["--version"], {}),
-        (["--width", "30", "zones", "de", "--zone", "3"], {}),
+        (["--width", "16", "zones", "de", "--zone", "3"], {}),
+        (["--width", "40", "batch", f"{d}/held-3.csv"], {}),
+        (["--config", f["p8"], *q2], {}),
+        (["--config", f["p8"], "carriers"], {}),
+        (["--set", "pricing_date=2028-04-28", *q], {}),
+        (["--set", "pricing_date=2027-12-23", "--set", "round_step=0.05", "batch", f"{d}/held-3.csv", "--format", "csv"], {}),
+        (["--set", "pricing_date=2026-02-30", *q], {}),
         (["--set", "carriers=courier,freight", "--set", "fuel_pct=7.25", "carriers"], {}),
     ]
     return out

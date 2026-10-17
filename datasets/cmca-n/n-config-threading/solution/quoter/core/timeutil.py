@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 from datetime import date, timedelta
 
 # Fixed public holidays (month, day) on which no carrier delivers.
@@ -13,8 +14,14 @@ def pricing_date(conf) -> date:
     return date.fromisoformat(conf.pricing_date)
 
 
+@functools.lru_cache(maxsize=None)
+def closed_days(year: int) -> frozenset:
+    """Holiday dates of the pricing year `year` and the year after it."""
+    return frozenset(date(y, m, d) for y in (year, year + 1) for m, d in HOLIDAYS)
+
+
 def is_delivery_day(conf, day: date) -> bool:
-    if (day.month, day.day) in HOLIDAYS:
+    if day in closed_days(pricing_date(conf).year):
         return False
     if day.weekday() == 6:
         return False

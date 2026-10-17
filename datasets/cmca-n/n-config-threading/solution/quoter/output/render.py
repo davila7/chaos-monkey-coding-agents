@@ -31,7 +31,7 @@ def render_batch(conf, result, fmt: str) -> str:
         return csvout.batch_csv(conf, result)
     if fmt == "json":
         return jsonout.batch_json(conf, result)
-    table = text.TextTable(conf, ["Id", "Carrier", "Service", "Net", "Gross"])
+    table = text.TextTable(["Id", "Carrier", "Service", "Net", "Gross"])
     for line in result.lines:
         q = line.quote
         if q is None:

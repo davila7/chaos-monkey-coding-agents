@@ -89,7 +89,7 @@ def main() -> int:
     copy_package(HERE / "ref" / "billing", work / "ref" / "billing")
     copy_package(app / "billing", work / "agent" / "billing")
     datagen.generate(work / "vis-data", VISIBLE_SEED)
-    datagen.generate(work / "held-data", HELDOUT_SEED, orders=240, credits=70)
+    datagen.generate(work / "held-data", HELDOUT_SEED, orders=240, credits=70, held_out=True)
     ok = True
     for name, data in (("visible", work / "vis-data"), ("held-out", work / "held-data")):
         ref = run_all(work / "ref", data, work / f"ref-{name}")

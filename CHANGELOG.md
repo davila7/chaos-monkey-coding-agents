@@ -14,3 +14,4 @@
 - Track S: nine new tasks on the `inventory`, `deploy` and `docs` services, two of them across several services (D-0034 item 5); `deploy` gains `list_services` and a `status` history limit.
 - Track N: nine new tasks, two per category with the existing three (D-0034 item 5).
 - Calibration round 1 (D-0034 item 6): 24 tasks, `cc-claude` clean, 5 attempts each, evidence in `results/calibration/`.
+- Hardening batch 1 (D-0035): `s-client-retry`, `s-damage-claims`, `s-incident-rollback`, `n-invoice-fix`, `n-config-threading` and `n-bisect-regression` at 2.0.0.

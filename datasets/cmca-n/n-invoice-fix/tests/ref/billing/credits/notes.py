@@ -86,7 +86,6 @@ def build_credit(req: CreditRequest, invoice: dict, earlier: list[CreditRequest]
         except CreditError:
             if r is req:
                 raise
-            # A failed request credits nothing; the ones after it ignore it.
             continue
     percents = [juris.rate_on(src["tax_category"], parse_date(invoice["date"])) for src, _, _ in out]
     result = compute(juris, [TaxLine(src["tax_category"], p, a) for (src, _, a), p in zip(out, percents)])

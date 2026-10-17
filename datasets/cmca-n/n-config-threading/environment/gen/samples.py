@@ -108,12 +108,12 @@ def shipments(rng: random.Random, rows: int, imperial: bool = False, bad: int = 
 
 
 PROFILES = [
-    {"currency": "GBP", "rate_card": "2026", "fuel_pct": "14.25", "carriers": "express,ground,courier"},
-    {"units": "imperial", "dim_divisor": "6000", "line_width": "60", "label_format": "long"},
-    {"rounding": "up", "round_step": "0.05", "tax_rate": "0.19", "zone_overrides": "CH=3,NO=3,GB=3"},
-    {"box_set": "eco", "packing_margin_cm": "4", "surcharge_residential": "3.40", "insurance_min": "5"},
-    {"pricing_date": "2026-12-02", "surcharge_peak": "1.75", "saturday_delivery": "yes", "fx_margin": "2.5", "currency": "SEK"},
-    {"discount_tiers": "5:1.5,20:4,80:9", "express_markup": "7", "ground_markup": "1.5", "csv_delimiter": ";", "json_indent": "0"},
+    {"currency": "GBP"},
+    {"rate_card": "2026"},
+    {"fuel_pct": "14.25"},
+    {"box_set": "eco"},
+    {"discount_tiers": "5:1.5,20:4,80:9"},
+    {"csv_delimiter": ";"},
 ]
 
 
@@ -129,9 +129,8 @@ def make_samples(seed: int, out: Path, files: int, rows: int) -> list:
     out.mkdir(parents=True, exist_ok=True)
     written = []
     for i in range(files):
-        imperial = i % 4 == 3
-        name = f"shipments-{i + 1:02d}{'-imperial' if imperial else ''}.csv"
-        (out / name).write_text(shipments(rng, rng.randint(rows // 2, rows), imperial), encoding="utf-8")
+        name = f"shipments-{i + 1:02d}.csv"
+        (out / name).write_text(shipments(rng, rng.randint(rows // 2, rows)), encoding="utf-8")
         written.append(out / name)
     for i, profile in enumerate(PROFILES):
         name = f"customer-{i + 1}.ini"
