@@ -16,3 +16,4 @@
 - Calibration round 1 (D-0034 item 6): 24 tasks, `cc-claude` clean, 5 attempts each, evidence in `results/calibration/`.
 - Hardening batch 1 (D-0035): `s-client-retry`, `s-damage-claims`, `s-incident-rollback`, `n-invoice-fix`, `n-config-threading` and `n-bisect-regression` at 2.0.0.
 - SPEC 10.3: the difficulty band becomes a lower bound of 0.4 clean pass^1 for the reference config, with no upper bound (D-0036). `s-incident-rollback` 3.0.0 (1.0.0 content), `n-timesheet-payroll`, `n-csv-export` and `n-rate-limiter` at 2.0.0, new `n-db-build`; `s-incident-rollback` 2.0.0 and `n-wheel-packaging` in `reserve/`.
+- Track N exposure floor of 4 calls; shell poison by changed-line replacement in the output; targeted per-trial stale data and false failures (profile field `targeted`, persistence `stale`), with `moderate` at 0.5 and `heavy` at 1.0 (D-0037). Catalog v1: `poison.variant` also applies to `shell`.

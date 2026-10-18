@@ -7,6 +7,7 @@ import {
   type FaultDecision,
   type FaultType,
   type PersistenceMode,
+  type TargetedType,
 } from './types.js';
 
 export interface KeyState {
@@ -32,10 +33,15 @@ export interface TrialState {
   occ: Record<string, number>;
   keys: Record<string, KeyState>;
   outage: OutageState | null;
+  /**
+   * Targeted faults already settled this trial, by `<type>:<index>`:
+   * `apply` once counted against the cap, `pass` when not selected or capped.
+   */
+  targeted?: Record<string, 'apply' | 'pass'>;
 }
 
 export function emptyState(): TrialState {
-  return { v: 1, seq: 0, eligible: 0, faults: 0, occ: {}, keys: {}, outage: null };
+  return { v: 1, seq: 0, eligible: 0, faults: 0, occ: {}, keys: {}, outage: null, targeted: {} };
 }
 
 export function callKey(cfg: Pick<EngineConfig, 'seed'>, sig: CallSignature): string {
@@ -60,6 +66,38 @@ function matchesArgs(match: Record<string, unknown>, args: unknown): boolean {
   if (args === null || typeof args !== 'object') return false;
   const a = args as Record<string, unknown>;
   return keys.every((k) => JSON.stringify(a[k]) === JSON.stringify(match[k]));
+}
+
+const PATH_CHAR = /[A-Za-z0-9._\/~-]/;
+
+/**
+ * Whether a shell command names `source`, absolute or relative to the
+ * workspace root, as a whole path. Reads the command only (CLAUDE.md rule 12).
+ */
+export function commandNamesPath(command: string, source: string, workspaceRoot: string): boolean {
+  const root = workspaceRoot.endsWith('/') ? workspaceRoot : `${workspaceRoot}/`;
+  const forms = [source];
+  if (source.startsWith(root)) {
+    const rel = source.slice(root.length);
+    forms.push(`./${rel}`, rel);
+  }
+  for (const form of forms) {
+    let i = command.indexOf(form);
+    while (i >= 0) {
+      const before = i === 0 ? '' : command[i - 1]!;
+      const after = command[i + form.length] ?? '';
+      if (!PATH_CHAR.test(before) && !PATH_CHAR.test(after)) return true;
+      i = command.indexOf(form, i + 1);
+    }
+  }
+  return false;
+}
+
+function poisonMatches(cfg: EngineConfig, decl: EngineConfig['task']['poison'][number], sig: CallSignature): boolean {
+  if (decl.tool !== sig.capability) return false;
+  if (decl.source === undefined) return matchesArgs(decl.match, sig.args);
+  const command = (sig.args as Record<string, unknown> | null | undefined)?.command;
+  return typeof command === 'string' && commandNamesPath(command, decl.source, cfg.workspace_root);
 }
 
 function isExemptPath(paths: readonly string[] | undefined, prefixes: readonly string[]): boolean {
@@ -93,7 +131,7 @@ export function candidateTypes(cfg: EngineConfig, catalog: readonly CatalogEntry
     const driftIdx: number[] = [];
     if (type === 'poison') {
       cfg.task.poison.forEach((p, i) => {
-        if (p.tool === tool && matchesArgs(p.match, sig.args)) poisonIdx.push(i);
+        if (poisonMatches(cfg, p, sig)) poisonIdx.push(i);
       });
       if (poisonIdx.length === 0) continue;
     }
@@ -159,6 +197,58 @@ function fromKeyState(ks: KeyState): Partial<FaultDecision> {
   return d;
 }
 
+function deliverable(cfg: EngineConfig, type: FaultType, capability: string): boolean {
+  return (
+    cfg.parity_set.includes(type) &&
+    FAULT_LAYERS[type].includes(cfg.layer) &&
+    !cfg.parity_gaps.some((g) => g.type === type && appliesTo(g.capability, capability))
+  );
+}
+
+/** The per-trial draw of D-0037: depends on the trial and the declaration only. */
+export function targetedSelected(cfg: EngineConfig, sig: CallSignature, type: TargetedType, index: number): boolean {
+  const rate = cfg.profile.targeted?.[type] ?? 0;
+  if (rate <= 0) return false;
+  return unitDraw([cfg.seed, sig.taskId, sig.attempt, 'targeted', type, index].join('|')) < rate;
+}
+
+/** Targeted faults selected for this trial and not yet settled. */
+function pendingTargeted(cfg: EngineConfig, sig: CallSignature, settled: Record<string, 'apply' | 'pass'>): number {
+  let n = 0;
+  cfg.task.poison.forEach((p, i) => {
+    if (settled[`poison:${i}`] === undefined && deliverable(cfg, 'poison', p.tool) && targetedSelected(cfg, sig, 'poison', i)) n++;
+  });
+  if (cfg.layer === 'service') {
+    cfg.task.non_idempotent.forEach((t, i) => {
+      if (settled[`falsefail:${i}`] === undefined && deliverable(cfg, 'falsefail', t.tool) && targetedSelected(cfg, sig, 'falsefail', i)) n++;
+    });
+  }
+  return n;
+}
+
+interface TargetedHit {
+  type: TargetedType;
+  index: number;
+  mode: PersistenceMode;
+  /** Applies only to the first matching call of the trial. */
+  once: boolean;
+}
+
+function targetedHit(cfg: EngineConfig, sig: CallSignature): TargetedHit | null {
+  if (deliverable(cfg, 'poison', sig.capability)) {
+    for (let i = 0; i < cfg.task.poison.length; i++) {
+      if (poisonMatches(cfg, cfg.task.poison[i]!, sig) && targetedSelected(cfg, sig, 'poison', i)) {
+        return { type: 'poison', index: i, mode: 'stale', once: false };
+      }
+    }
+  }
+  if (cfg.layer === 'service' && deliverable(cfg, 'falsefail', sig.capability)) {
+    const i = cfg.task.non_idempotent.findIndex((n) => n.tool === sig.capability);
+    if (i >= 0 && targetedSelected(cfg, sig, 'falsefail', i)) return { type: 'falsefail', index: i, mode: 'transient', once: true };
+  }
+  return null;
+}
+
 /**
  * The SPEC 7.4 decision function. Mutates `state` (occurrence counters,
  * sequence, fault count, persistence) and returns the decision. Given the
@@ -194,8 +284,42 @@ export function step(
   if (isExemptPath(sig.paths, prefixes)) return pass('exempt_path');
   if (eligibleIndex < cfg.profile.warmup_calls) return pass('warmup');
 
+  const hit = targetedHit(cfg, sig);
+  const settled = (state.targeted ??= {});
+  const hitId = hit ? `${hit.type}:${hit.index}` : '';
+  const prior = hit ? settled[hitId] : undefined;
+  const targetedEntries =
+    hit && (prior === undefined || (prior === 'apply' && !hit.once))
+      ? catalog
+          .filter((e) => e.type === hit.type && e.applies_to.some((p) => appliesTo(p, sig.capability)))
+          .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      : [];
+  // Per-call faults leave room for the targeted faults this trial still owes,
+  // so the cap never crowds them out (D-0037 item 3).
+  const perCallCap = cap - pendingTargeted(cfg, sig, settled);
+  if (hit && targetedEntries.length > 0) {
+    if (prior === undefined) {
+      if (state.faults >= cap) {
+        settled[hitId] = 'pass';
+        return pass('cap');
+      }
+      settled[hitId] = 'apply';
+      state.faults += 1;
+    }
+    tickOutage();
+    const entry = pick(targetedEntries, unitDraw(`${key}|${occurrence}|payload`));
+    return {
+      ...base,
+      inject: true,
+      type: hit.type,
+      payloadId: entry.id,
+      persistence: hit.mode,
+      ...(hit.type === 'poison' ? { poisonIndex: hit.index } : {}),
+    };
+  }
+
   if (priorOutage && priorOutage.remaining > 0 && priorOutage.tool === sig.capability) {
-    if (state.faults >= cap) return pass('cap');
+    if (state.faults >= perCallCap) return pass('cap');
     state.faults += 1;
     tickOutage();
     return { ...base, ...fromKeyState(priorOutage), inject: true };
@@ -204,7 +328,7 @@ export function step(
   const ks = state.keys[key];
   if (ks) {
     if (ks.remaining <= 0) return pass();
-    if (state.faults >= cap) {
+    if (state.faults >= perCallCap) {
       ks.remaining = 0;
       return pass('cap');
     }
@@ -218,7 +342,7 @@ export function step(
   if (candidates.length === 0) return pass('not_applicable');
   const u = unitDraw(`${key}|${occurrence}`);
   if (!(u < classRate(cfg.profile, sig.capability))) return pass();
-  if (state.faults >= cap) return pass('cap');
+  if (state.faults >= perCallCap) return pass('cap');
 
   const chosen = weighted(candidates, unitDraw(`${key}|${occurrence}|type`));
   const entry = pick(chosen.entries, unitDraw(`${key}|${occurrence}|payload`));

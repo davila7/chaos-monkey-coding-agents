@@ -47,3 +47,39 @@ export function applyDrift(output: string, drift: Drift): string | null {
   }
   return JSON.stringify(changed);
 }
+
+/** The (original, stale) pairs of the lines a shell poison variant changes. */
+export function staleLines(original: string, variant: string): Array<[string, string]> {
+  const a = original.split('\n');
+  const b = variant.split('\n');
+  if (a.length !== b.length) return [];
+  const pairs: Array<[string, string]> = [];
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i] && a[i] !== '') pairs.push([a[i]!, b[i]!]);
+  return pairs;
+}
+
+// What `cat -n`, `grep -n` and `grep` over several files put before a line.
+const LINE_PREFIX = /^(\s*\d+\t|\d+[:-]|[^\t\n]*?:(\d+[:-])?)$/;
+
+/**
+ * Shell poison delivery (D-0037): each output line that shows an original
+ * changed line, whole or after a line-number or file-name prefix, shows the
+ * stale line instead. Output that does not show those lines is unchanged.
+ */
+export function replaceStaleLines(output: string, pairs: ReadonlyArray<readonly [string, string]>): string {
+  if (pairs.length === 0) return output;
+  return output
+    .split('\n')
+    .map((line) => {
+      const cr = line.endsWith('\r') ? '\r' : '';
+      const body = cr ? line.slice(0, -1) : line;
+      for (const [orig, stale] of pairs) {
+        if (body === orig) return stale + cr;
+        if (body.endsWith(orig) && LINE_PREFIX.test(body.slice(0, body.length - orig.length))) {
+          return body.slice(0, body.length - orig.length) + stale + cr;
+        }
+      }
+      return line;
+    })
+    .join('\n');
+}

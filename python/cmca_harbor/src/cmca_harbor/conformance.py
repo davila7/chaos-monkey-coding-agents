@@ -85,6 +85,7 @@ def probe_profile(fault_type: str, capability: str) -> dict[str, Any]:
         "persistence": {"transient": 1},
         "weights": {fault_type: 1},
         "class_rate_multipliers": {c: (1 if c == capability else 0) for c in (*CLASSES, "mcp")},
+        "targeted": {},
     }
 
 
@@ -102,12 +103,36 @@ def task_chaos(task_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
         "exempt": {"paths": [], **raw.get("exempt", {})},
     }
     variants = {p["variant"]: (task_dir / p["variant"]).read_text() for p in poison}
-    return task, variants
+    sources = {p["variant"]: shell_source(task_dir, p, variants[p["variant"]]) for p in poison if p["tool"] == "shell"}
+    return task, variants, sources
+
+
+MAX_STALE_LINES = 10
+
+
+def shell_source(task_dir: Path, decl: dict[str, Any], variant: str) -> str:
+    """The original of a shell poison source, checked against its variant (SPEC 10.3, D-0037)."""
+    source = decl.get("source")
+    if not isinstance(source, str) or not source.startswith("/app/"):
+        raise ValueError(f"{task_dir.name}: shell poison needs a source under /app")
+    original = (task_dir / "environment" / source.removeprefix("/app/")).read_text()
+    a, b = original.split("\n"), variant.split("\n")
+    if len(a) != len(b):
+        raise ValueError(f"{task_dir.name}: {decl['variant']} must keep the line count of {source}")
+    changed = [i for i in range(len(a)) if a[i] != b[i]]
+    if not 0 < len(changed) <= MAX_STALE_LINES:
+        raise ValueError(f"{task_dir.name}: {decl['variant']} changes {len(changed)} lines, expected 1 to {MAX_STALE_LINES}")
+    for i in changed:
+        if a[i] == "" or a.count(a[i]) != 1:
+            raise ValueError(f"{task_dir.name}: line {i + 1} of {source} must be non-empty and unique to be replaced")
+    if not any(decl["token"] in b[i] for i in changed):
+        raise ValueError(f"{task_dir.name}: no changed line of {decl['variant']} carries the token")
+    return original
 
 
 def engine_config(harness: str, version: str, fault_type: str, capability: str) -> dict[str, Any]:
     probe = PROBES[capability]
-    task, variants = task_chaos(DATASET / probe.task)
+    task, variants, sources = task_chaos(DATASET / probe.task)
     return {
         "schema": "tt-engine/1",
         "seed": "conformance",
@@ -124,6 +149,7 @@ def engine_config(harness: str, version: str, fault_type: str, capability: str) 
         "task": task,
         "exempt_paths": [],
         "variants": variants,
+        "sources": sources,
     }
 
 

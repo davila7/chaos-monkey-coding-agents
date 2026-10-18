@@ -56,7 +56,12 @@ export const FAULT_LAYERS: Record<FaultType, readonly Layer[]> = {
   byz: ['native'],
 };
 
-export type PersistenceMode = 'transient' | 'sticky' | 'outage';
+/** `stale`: a targeted poison that holds for every matching call of the trial (D-0037). */
+export type PersistenceMode = 'transient' | 'sticky' | 'outage' | 'stale';
+
+/** Types a profile may draw once per trial instead of per call (D-0037). */
+export const TARGETED_TYPES = ['poison', 'falsefail'] as const;
+export type TargetedType = (typeof TARGETED_TYPES)[number];
 
 export interface CallSignature {
   taskId: string;

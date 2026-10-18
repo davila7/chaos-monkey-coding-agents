@@ -133,6 +133,7 @@ def probe_profile(fault_type: str | None) -> dict[str, Any]:
         "persistence": {"transient": 1},
         "weights": {fault_type: 1} if fault_type else {},
         "class_rate_multipliers": {},
+        "targeted": {},
     }
 
 

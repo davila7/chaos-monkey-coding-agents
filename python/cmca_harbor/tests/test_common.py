@@ -45,6 +45,7 @@ RESOLVED = {
         "persistence": {},
         "weights": {},
         "class_rate_multipliers": {},
+        "targeted": {},
     },
     "parity_set": [],
     "parity_gaps": [],
@@ -60,6 +61,7 @@ RESOLVED = {
     },
     "exempt_paths": [],
     "variants": {},
+    "sources": {},
 }
 
 

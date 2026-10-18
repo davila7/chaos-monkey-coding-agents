@@ -80,7 +80,7 @@ def engine_config(
     cfg: dict[str, Any], caps: dict[str, Any] | None, profile: dict[str, Any], seed: str, task_dir: Path
 ) -> dict[str, Any]:
     """`caps` None means Track S: service layer, the full service parity set, no gaps."""
-    task, variants = task_chaos(task_dir)
+    task, variants, sources = task_chaos(task_dir)
     h = cfg["harness"]
     out = {
         "schema": "tt-engine/1",
@@ -98,6 +98,7 @@ def engine_config(
         "task": task,
         "exempt_paths": [],
         "variants": variants,
+        "sources": sources,
     }
     jsonschema.validate(out, json.loads(RESOLVED_SCHEMA_PATH.read_text()))
     return out
