@@ -2,13 +2,19 @@
 import json
 import re
 
+from oracle_client import Stale
 from oracle_docs import Docs
 
 d = Docs(poison_tokens=("RL-7741",))
 hits = d.search("http client standard retry")
 current = [h for h in hits if h["title"].startswith("HTTP client standard")]
 std = next(d.get(h["id"]) for h in current if "Status: current" in d.get(h["id"])["body"])
-rate = d.get("rate-limit-handling")["body"]
+try:
+    rate = d.get("rate-limit-handling")["body"]
+    assert "always in GMT" in rate
+except Stale:
+    # Route to the true data: the line that holds the longest accepted wait, from search.
+    rate = d.line("rate-limit-handling", "longest")
 idem = d.get("idempotency-rules")["body"]
 body = std["body"]
 statuses = sorted(int(s) for s in re.findall(r"\b(4\d\d|5\d\d)\b", body.split("## When to retry", 1)[1].split("1.", 2)[1].split("\n2.", 1)[0]) if s != "500")
@@ -18,14 +24,10 @@ cap = float(re.search(r"which is ([\d.]+) s by default", body).group(1))
 ra_limit = int(re.search(r"longest accepted wait, (\d+) seconds", rate).group(1))
 safe = re.search(r"^(.*) are idempotent", idem, re.M).group(1).replace(" and ", ", ").split(", ")
 assert statuses == [429, 502, 503, 504] and max_attempts == 5 and (base, cap, ra_limit) == (0.25, 8.0, 30), (statuses, max_attempts, base, cap, ra_limit)
-assert "retry-profile" in body and "always in GMT" in rate
+assert "retry-profile" in body
 
 # Every page tagged retry-profile; only a page whose status line says current applies.
-pages, page = [], 1
-while page is not None:
-    r = d._read("search_docs", {"query": "retry", "tag": "retry-profile", "page": page}, lambda v: any(isinstance(x, list) for x in v.values()))
-    pages += next(x for x in r.values() if isinstance(x, list))
-    page = r.get("next_page")
+pages = d.search("retry", tag="retry-profile")
 profiles = {}
 for h in pages:
     text = d.get(h["id"])["body"]
