@@ -11,8 +11,11 @@ import json
 import math
 import re
 import shlex
+import functools
 import shutil
+import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -110,12 +113,31 @@ def task_chaos(task_dir: Path) -> tuple[dict[str, Any], dict[str, str]]:
 MAX_STALE_LINES = 10
 
 
+@functools.cache
+def _generated(build: Path) -> Path:
+    """Output of a task's `environment/gen/build.py`, which some Track N images run to build /app."""
+    out = Path(tempfile.mkdtemp(prefix="tt-gen-"))
+    subprocess.run([sys.executable, str(build), str(out / "app")], check=True, capture_output=True)
+    return out / "app"
+
+
+def source_text(task_dir: Path, rel: str) -> str:
+    """A file as it is under /app in the task image: copied from environment/, or generated."""
+    direct = task_dir / "environment" / rel
+    if direct.exists():
+        return direct.read_text()
+    build = task_dir / "environment/gen/build.py"
+    if build.exists():
+        return (_generated(build.resolve()) / rel).read_text()
+    raise FileNotFoundError(direct)
+
+
 def shell_source(task_dir: Path, decl: dict[str, Any], variant: str) -> str:
     """The original of a shell poison source, checked against its variant (SPEC 10.3, D-0037)."""
     source = decl.get("source")
     if not isinstance(source, str) or not source.startswith("/app/"):
         raise ValueError(f"{task_dir.name}: shell poison needs a source under /app")
-    original = (task_dir / "environment" / source.removeprefix("/app/")).read_text()
+    original = source_text(task_dir, source.removeprefix("/app/"))
     a, b = original.split("\n"), variant.split("\n")
     if len(a) != len(b):
         raise ValueError(f"{task_dir.name}: {decl['variant']} must keep the line count of {source}")

@@ -638,12 +638,12 @@ Pilot: 12 tasks per track. v1.0: 40 tasks per track.
 - **Difficulty lower bound.** Clean pass^1 for the reference config of at least 0.4 in pilot calibration. Tasks below it are revised or moved to the reserve pool. There is no upper bound; the analysis reports clean pass^1 per task so saturation is visible (D-0036).
 - **Deterministic verifiers.** Tests check final state (files, service state, `STATUS.json`), never the transcript. No LLM judges in outcomes.
 - **No shortcuts.** Tests are not in the image. Answers cannot be derived from the environment without doing the work. Services hold the ground truth behind an admin endpoint the agent cannot reach.
-- **Declarations in `chaos.toml`:** poisonable resources with their poisoned variant and canary token, non-idempotent tools, drift variants, and alternatives for outage faults. A `shell` poison declaration names its `source`, a file under the workspace; its variant keeps the source's line count and changes at most 10 lines, each non-empty and unique in the source, and at least one changed line carries the token (D-0037).
+- **Declarations in `chaos.toml`:** at least one poisonable resource the solution depends on (D-0037); poisonable resources with their poisoned variant and canary token, non-idempotent tools, drift variants, and alternatives for outage faults. A `shell` poison declaration names its `source`, a file under the workspace; its variant keeps the source's line count and changes at most 10 lines, each non-empty and unique in the source, and at least one changed line carries the token (D-0037).
 - Tasks are authored as oracle scripts plus tests. Do not author tasks by running any of the evaluated harnesses, to avoid style bias toward one harness.
 
 ### 10.4 Validation pipeline (CI, per task)
 
-1. Schema lint (`task.toml`, `chaos.toml`, instruction contract, canary present in non-agent-visible files and absent from agent-visible files, banned words absent from agent-visible files).
+1. Schema lint (`task.toml`, `chaos.toml` with at least one poisonable resource (D-0037), instruction contract, canary present in non-agent-visible files and absent from agent-visible files, banned words absent from agent-visible files).
 2. Image build with pinned base image digest.
 3. `oracle` passes under `clean`.
 4. `nop` scores 0.

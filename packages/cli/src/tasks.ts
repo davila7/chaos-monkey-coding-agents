@@ -45,7 +45,7 @@ export function semverGreater(a: string, b: string): boolean {
 }
 
 export interface TaskFileIssue {
-  rule: 'task-version' | 'chaos-schema' | 'instruction-contract';
+  rule: 'task-version' | 'chaos-schema' | 'chaos-poison' | 'instruction-contract';
   detail: string;
 }
 
@@ -61,7 +61,13 @@ export function taskFileIssues(dir: string, benchmark: boolean): TaskFileIssue[]
   else if (!parseSemver(version)) issues.push({ rule: 'task-version', detail: `version "${version}" is not MAJOR.MINOR.PATCH` });
   const chaos = join(dir, 'chaos.toml');
   if (!existsSync(chaos)) issues.push({ rule: 'chaos-schema', detail: 'chaos.toml is missing' });
-  else if (chaosSchema(readFileSync(chaos, 'utf8')) !== 'tt-task/1') issues.push({ rule: 'chaos-schema', detail: 'chaos.toml schema is not "tt-task/1"' });
+  else {
+    const text = readFileSync(chaos, 'utf8');
+    if (chaosSchema(text) !== 'tt-task/1') issues.push({ rule: 'chaos-schema', detail: 'chaos.toml schema is not "tt-task/1"' });
+    if (benchmark && !/^\s*\[\[poison\]\]/m.test(text)) {
+      issues.push({ rule: 'chaos-poison', detail: 'chaos.toml declares no poisonable resource (SPEC 10.3, D-0037)' });
+    }
+  }
   const instruction = join(dir, 'instruction.md');
   if (benchmark && (!existsSync(instruction) || !readFileSync(instruction, 'utf8').trimEnd().endsWith(COMPLETION_CONTRACT))) {
     issues.push({ rule: 'instruction-contract', detail: 'instruction.md does not end with the completion contract (SPEC B.3)' });
