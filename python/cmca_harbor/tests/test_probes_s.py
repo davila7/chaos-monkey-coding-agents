@@ -19,6 +19,28 @@ def test_every_service_type_is_probed_once():
     assert sorted(types) == sorted(["deny", "err", "empty", "trunc", "falsefail", "poison", "drift", "latency", "rate"])
 
 
+@pytest.mark.parametrize(
+    "config,agent,model,aks",
+    [
+        ("pi-claude", "cmca_harbor:ChaosPi", "anthropic/claude-sonnet-5-5", ["version=1.0.3", "reasoning_effort=medium"]),
+        ("opencode-claude", "cmca_harbor:ChaosOpenCode", "anthropic/claude-sonnet-5-5", ["version=1.18.35", "variant=medium"]),
+    ],
+)
+def test_plan_runs_pi_and_opencode_on_the_gateway(tmp_path, config, agent, model, aks):
+    import shlex
+
+    cmds = [shlex.split(c) for c in probes_s.plan(config, tmp_path / "cfg", tmp_path / "jobs")]
+    assert len(cmds) == 10
+    for argv in cmds:
+        assert argv[:3] == ["env", f"TT_CONFIG_DIR={tmp_path / 'cfg' / argv[argv.index('--job-name') + 1].removeprefix(f'probe-s-{config}-')}", "TT_ATTEMPT=0"]
+        assert argv[argv.index("-a") + 1] == agent and argv[argv.index("-m") + 1] == model
+        values = [argv[i + 1] for i, a in enumerate(argv) if a == "--ak"]
+        assert values == ["attempt_index=0", *aks]
+        assert not any(v.startswith("tt_") for v in values)
+    cfg = json.loads((tmp_path / "cfg/err/probe-s-read.json").read_text())
+    assert cfg["harness"] == f"{config.split('-')[0]}@{aks[0].split('=')[1]}" and cfg["layer"] == "service"
+
+
 @pytest.mark.parametrize("config", ["fx-claude", "cc-claude"])
 def test_plan_writes_one_config_per_task_and_job(tmp_path, config):
     cmds = probes_s.plan(config, tmp_path / "cfg", tmp_path / "jobs")

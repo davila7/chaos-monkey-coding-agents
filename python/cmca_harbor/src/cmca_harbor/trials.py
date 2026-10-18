@@ -50,12 +50,32 @@ def load_config(config_id: str) -> dict[str, Any]:
     return cfg
 
 
+# Harbor's Pi and OpenCode agents take `provider/model`; Claude Code and fx
+# take the config's id as it is.
+PROVIDER_PREFIXED = ("pi", "opencode")
+ROUTE_PROVIDER = {"anthropic-api": "anthropic"}
+# Harbor option that carries `model.reasoning`. OpenCode's is the model
+# variant (`opencode run --variant`); Pi's `thinking` accepts `reasoning_effort`.
+REASONING_OPTION = {"opencode": "variant"}
+
+
+def harbor_model(cfg: dict[str, Any]) -> str | None:
+    """The `-m` value for Harbor, or None for its built-in agents."""
+    model = cfg.get("model")
+    if model is None:
+        return None
+    if cfg["harness"]["name"] in PROVIDER_PREFIXED and "/" not in model["id"]:
+        return f"{ROUTE_PROVIDER[model['route']]}/{model['id']}"
+    return model["id"]
+
+
 def reasoning_kwargs(cfg: dict[str, Any]) -> list[tuple[str, str]]:
-    """`reasoning_effort` for Harbor when the config pins one (D-0029)."""
+    """The harness's reasoning option for Harbor when the config pins one (D-0029)."""
     reasoning = (cfg.get("model") or {}).get("reasoning")
     if not reasoning or str(reasoning).startswith("<"):
         return []
-    return [("reasoning_effort", str(reasoning))]
+    key = REASONING_OPTION.get((cfg.get("harness") or {}).get("name"), "reasoning_effort")
+    return [(key, str(reasoning))]
 
 
 def load_profile(name: str) -> dict[str, Any]:
@@ -138,8 +158,8 @@ def plan(
             (cfg_dir / f"{t.name}.json").write_text(json.dumps(engine_config(cfg, caps, profile, seed, t), indent=2))
         for a in range(attempts):
             argv = ["harbor", "run", "-p", str(dataset), "-a", h["harbor_agent"]]
-            if cfg["model"] is not None:
-                argv += ["-m", cfg["model"]["id"]]
+            if (model := harbor_model(cfg)) is not None:
+                argv += ["-m", model]
             argv += ["-k", "1", "-o", str(jobs), "--job-name", f"{config_id}-{name}-a{a}", "-y"]
             if track == "n":
                 aks = (("attempt_index", a), ("tt_config_dir", cfg_dir), ("tt_build_dir", build), ("version", h["version"]))

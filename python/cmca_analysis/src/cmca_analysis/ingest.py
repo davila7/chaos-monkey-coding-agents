@@ -25,8 +25,11 @@ DATASETS = (REPO_ROOT / "datasets/cmca-n", REPO_ROOT / "datasets/cmca-s")
 STATUSES = {"success", "partial", "failure"}
 ELIGIBLE = ("pass", "apply")
 # Harnesses prefix MCP tools with the server name: `mcp__tickets__get_ticket`
-# (Claude Code), `mcp_tickets_get_ticket` (fx). The gateway logs the bare name.
-MCP_PREFIX = re.compile(r"^mcp__?[^_]+__?")
+# (Claude Code, Pi 1.0.3), `mcp_tickets_get_ticket` (fx), `tickets_get_ticket`
+# (OpenCode 1.18.35, V-25). The gateway logs the bare name. OpenCode's prefix
+# is only the server name, so it is stripped for the Track S services alone.
+MCP_SERVERS = ("tickets", "inventory", "deploy", "docs")
+MCP_PREFIX = re.compile(rf"^(?:mcp__?[^_]+__?|(?:{'|'.join(MCP_SERVERS)})_)")
 _JOB_NAME = re.compile(r"^(?P<config>.+)-(?P<profile>[a-z0-9]+)-a(?P<attempt>\d+)$")
 # Files whose text counts as a final artifact for poison propagation (SPEC 11, M8).
 ARTIFACT_GLOBS = ("verifier/*", "artifacts/app/STATUS.json", "artifacts/var/lib/*/state.json")
