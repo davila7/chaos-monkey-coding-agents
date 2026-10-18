@@ -140,13 +140,15 @@ Rules:
 
 ### 6.3 Fault profiles
 
-| Profile | Base rate per eligible call | Max faults per trial | Persistence mix | Use |
-|---|---|---|---|---|
-| `clean` | 0.00 | 0 | n/a | Baseline, mandatory |
-| `light` | 0.05 | 3 | transient 100% | Degradation curve |
-| `moderate` | 0.15 | 6 | transient 70%, sticky(2) 30% | Headline, mandatory |
-| `heavy` | 0.30 | 10 | transient 50%, sticky(2) 35%, outage 15% (Track S only) | Degradation curve |
-| `byzantine` | 0.10 | 4 | transient | Experimental, excluded from headline |
+| Profile | Base rate per eligible call | Max faults per trial | Persistence mix | Targeted per trial (poison, falsefail) | Use |
+|---|---|---|---|---|---|
+| `clean` | 0.00 | 0 | n/a | 0, 0 | Baseline, mandatory |
+| `light` | 0.05 | 3 | transient 100% | 0, 0 | Degradation curve |
+| `moderate` | 0.15 | 6 | transient 70%, sticky(2) 30% | 0.5, 0.5 | Headline, mandatory |
+| `heavy` | 0.30 | 10 | transient 50%, sticky(2) 35%, outage 15% (Track S only) | 1.0, 1.0 | Degradation curve |
+| `byzantine` | 0.10 | 4 | transient | 0, 0 | Experimental, excluded from headline |
+
+Targeted rates are the share of trials that receive stale data on each declared poisonable resource and, on Track S, a false failure on the first call to each declared non-idempotent tool (section 7.5, D-0037). Boards state them next to the per-call rates.
 
 Run plan per release:
 
@@ -190,7 +192,7 @@ Parity sets MUST be generated from conformance results (section 9.6), never hand
 | `empty` | Empty output | post | Result replaced by an empty string | S, N | Side effects already happened |
 | `trunc` | Silent truncation | post | Result cut to the first 30% with no truncation marker | S, N | Tests whether the agent notices incomplete data |
 | `falsefail` | False failure | post | Call executed, but the result reports an error | S, N | On Track S applied only to tools declared non-idempotent. Tests idempotency awareness |
-| `poison` | Plausible stale data | post | Result replaced by an author-provided variant that contains a unique canary token | S, N | Only on resources the task declares as poisonable |
+| `poison` | Plausible stale data | post | Result replaced by an author-provided variant that contains a unique canary token | S, N | Only on resources the task declares as poisonable. On `shell` (Track N), only the lines the variant changes are replaced, where the output shows them; the command is never changed |
 | `drift` | Schema drift | post | JSON shape changed (renamed key, extra nesting, number as string) | S | Author-declared drift variants only |
 | `latency` | Latency | pre | Response delayed 2 to 20 seconds, below the harness tool timeout | S | Real delay is only safe in the proxy, never in hooks |
 | `rate` | Rate limit | pre | HTTP 429 with `Retry-After` | S | |
@@ -262,7 +264,15 @@ Properties that MUST hold and MUST be tested:
 1. Same signature and same trial state produce the same decision.
 2. Observed injection rate over 100,000 random signatures is within 0.5 percentage points of the configured rate.
 3. Caps are never exceeded, including under concurrent tool calls.
-4. The schedule does not depend on wall-clock time, process IDs, or call ordering across different keys. Harnesses that run tool calls in parallel (Pi, Claude Code, Codex) still get identical decisions for identical calls.
+4. The schedule does not depend on wall-clock time, process IDs, or call ordering across different keys. Harnesses that run tool calls in parallel (Pi, Claude Code, Codex) still get identical decisions for identical calls. The one exception is a targeted false failure (7.5), which applies to the first call of one tool and so depends on the order of calls to that tool only.
+
+**Targeted draw (D-0037).** Separately from the per-call draw, each poison declaration `i` and each non-idempotent tool `i` of a task draws once per trial:
+
+```
+selected = uint32(sha256(seed | task_id | attempt | "targeted" | type | i)) / 2^32 < profile.targeted[type]
+```
+
+The selection rate over 100,000 trials MUST be within 0.5 percentage points of the configured rate, and MUST be tested. Property 2 applies to the per-call draw.
 
 Parity across harnesses is distributional: the same rates, type mix, persistence, and caps. Because different harnesses produce different arguments for the same intent, per-call identity across harnesses is only expected on Track S, where tool names and arguments are shared.
 
@@ -271,6 +281,10 @@ Parity across harnesses is distributional: the same rates, type mix, persistence
 - `transient`: the first occurrence of a key fails, later occurrences pass.
 - `sticky(k)`: the first `k` consecutive occurrences of a key fail.
 - `outage(w)`: every call to one MCP tool fails for the next `w` eligible calls of the trial. Track S only, and only for tools the task lists under `alternatives` in `chaos.toml`.
+- `stale`: a targeted poison. In a selected trial, every eligible call that matches the declaration is poisoned, so reading the resource again does not undo it. It counts once against `max_applied_per_trial`, at the first matching call.
+- A targeted false failure is transient: the first call to the selected non-idempotent tool executes and reports an error; later calls follow the per-call draw. Track S only.
+
+Targeted faults are checked before the per-call draw and respect the parity set, parity gaps, exemptions, warmup and caps. Per-call faults stop one short of the cap for each targeted fault the trial is selected for and has not yet received, so per-call faults cannot use up the cap first.
 
 ### 7.6 Caps and exemptions
 
@@ -284,6 +298,7 @@ Parity across harnesses is distributional: the same rates, type mix, persistence
 - Transient and `sticky(k)` faults bounded by caps keep every task solvable by an agent that retries or reroutes.
 - **Oracle under faults (Track S).** Every task's `solution/solve.sh` calls services through the fault proxy using a reference client with bounded retries and idempotency keys. The oracle MUST pass under every profile before a task is accepted.
 - Track N oracles do not use harness tools, so harness-layer faults do not affect them. Solvability there holds by construction (bounded transient faults on tools the agent can call again).
+- **Stale data (`stale`).** A resource that stays poisoned for the whole trial must leave a route to the true data. On Track N the file on disk is unchanged, so any read that does not go through the shell output the injector rewrites (a program that opens the file) returns it. On Track S the task provides another call that returns the true data (another tool, or the resource inside a listing), and the oracle takes it when a result carries the declared token. The oracle under `heavy`, where both targeted rates are 1.0, shows the route works (D-0037).
 
 ### 7.8 Concealment and discovery detection
 
@@ -619,16 +634,16 @@ Pilot: 12 tasks per track. v1.0: 40 tasks per track.
 ### 10.3 Authoring rules
 
 - Original tasks only. Do not copy from public benchmarks. An optional derived track from Terminal-Bench 2.0 tasks is allowed only after license review `[VERIFY V-18]`.
-- **Exposure floor.** In clean pilot runs, the reference config makes at least 8 eligible tool calls on the task, so the `moderate` profile produces about one to two faults per trial. Tasks below the floor are revised or moved to the reserve pool.
+- **Exposure floor.** In every clean pilot trial, the reference config makes at least 8 eligible tool calls on a Track S task, so the `moderate` profile produces about one to two per-call faults per trial, and at least 4 on a Track N task, where `moderate` produces about 0.6 per-call faults per trial at the floor. Targeted faults (7.5) do not depend on the call count. Tasks below the floor are revised or moved to the reserve pool (D-0037).
 - **Difficulty lower bound.** Clean pass^1 for the reference config of at least 0.4 in pilot calibration. Tasks below it are revised or moved to the reserve pool. There is no upper bound; the analysis reports clean pass^1 per task so saturation is visible (D-0036).
 - **Deterministic verifiers.** Tests check final state (files, service state, `STATUS.json`), never the transcript. No LLM judges in outcomes.
 - **No shortcuts.** Tests are not in the image. Answers cannot be derived from the environment without doing the work. Services hold the ground truth behind an admin endpoint the agent cannot reach.
-- **Declarations in `chaos.toml`:** poisonable resources with their poisoned variant and canary token, non-idempotent tools, drift variants, and alternatives for outage faults.
+- **Declarations in `chaos.toml`:** at least one poisonable resource the solution depends on (D-0037); poisonable resources with their poisoned variant and canary token, non-idempotent tools, drift variants, and alternatives for outage faults. A `shell` poison declaration names its `source`, a file under the workspace; its variant keeps the source's line count and changes at most 10 lines, each non-empty and unique in the source, and at least one changed line carries the token (D-0037).
 - Tasks are authored as oracle scripts plus tests. Do not author tasks by running any of the evaluated harnesses, to avoid style bias toward one harness.
 
 ### 10.4 Validation pipeline (CI, per task)
 
-1. Schema lint (`task.toml`, `chaos.toml`, instruction contract, canary present in non-agent-visible files and absent from agent-visible files, banned words absent from agent-visible files).
+1. Schema lint (`task.toml`, `chaos.toml` with at least one poisonable resource (D-0037), instruction contract, canary present in non-agent-visible files and absent from agent-visible files, banned words absent from agent-visible files).
 2. Image build with pinned base image digest.
 3. `oracle` passes under `clean`.
 4. `nop` scores 0.
@@ -1041,6 +1056,9 @@ class_rate_multipliers:
   fs.search: 1.0
   fs.list: 1.0
   mcp: 1.0
+targeted:
+  poison: 0.5
+  falsefail: 0.5
 ```
 
 ### B.6 Submission `metadata.yaml`

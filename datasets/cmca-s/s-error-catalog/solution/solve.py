@@ -2,6 +2,7 @@
 import json
 import re
 
+from oracle_client import Stale
 from oracle_docs import Docs
 
 d = Docs(poison_tokens=("EA-3107",))
@@ -15,7 +16,12 @@ for pid in sorted(pages):
         table[code] = (int(status), retry == "yes", msg)
     for old, new in re.findall(r"([A-Z]+-\d+) .*?(?:merged into|now reports as) ([A-Z]+-\d+)", body):
         deprecated[old] = new
-for code, status, retry, msg in ROW.findall(d.get("errors-amendments")["body"]):
+try:
+    amendments = d.get("errors-amendments")["body"]
+except Stale as e:
+    # Route to the true data: each amended row's line, from search by its code.
+    amendments = "\n".join(d.line("errors-amendments", code) for code, *_ in ROW.findall(e.value["body"]))
+for code, status, retry, msg in ROW.findall(amendments):
     table[code] = (int(status), retry == "yes", msg)
 for old, new in deprecated.items():
     table[old] = table[new]

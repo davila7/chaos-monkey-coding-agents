@@ -7,7 +7,7 @@ from oracle_deploy import Deploy
 from oracle_docs import Docs
 
 tk = Client(url="http://127.0.0.1:8000/tickets/mcp")
-d = Deploy()
+d = Deploy(poison_tokens=("r-9154",))
 docs = Docs()
 
 runbook = docs.get("release-runbook")["body"]

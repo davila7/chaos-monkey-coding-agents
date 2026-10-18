@@ -3,7 +3,7 @@ import { shortHash } from './hash.js';
 import type { RecordSink } from './logger.js';
 import { callKey, step } from './schedule.js';
 import type { StateStore } from './state.js';
-import { applyDrift, truncateHead30 } from './transforms.js';
+import { applyDrift, replaceStaleLines, staleLines, truncateHead30 } from './transforms.js';
 import { FAULT_PHASE, type CallSignature, type FaultDecision } from './types.js';
 
 export interface FaultEngine {
@@ -116,6 +116,12 @@ export function createEngine(deps: EngineDeps): FaultEngine {
           case 'poison': {
             const decl = d.poisonIndex !== undefined ? config.task.poison[d.poisonIndex] : undefined;
             const content = decl ? config.variants[decl.variant] : undefined;
+            if (decl?.source !== undefined) {
+              const original = config.sources[decl.variant];
+              return content !== undefined && original !== undefined
+                ? replaceStaleLines(output, staleLines(original, content))
+                : output;
+            }
             return content ?? output;
           }
           case 'drift': {

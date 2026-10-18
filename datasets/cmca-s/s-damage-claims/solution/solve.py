@@ -6,7 +6,7 @@ from oracle_client import Client
 from oracle_inventory import Inventory
 
 tk = Client(url="http://127.0.0.1:8000/tickets/mcp")
-inv = Inventory()
+inv = Inventory(poison_tokens=("adj-9406",))
 done = {"resolved": 0, "pending": 0}
 for row in sorted(tk.search_all(label="damage", status="open"), key=lambda r: r["id"]):
     t = tk.ticket(row["id"])
@@ -14,12 +14,12 @@ for row in sorted(tk.search_all(label="damage", status="open"), key=lambda r: r[
     wh = re.search(r"^Warehouse: (\S+)", t["body"], re.M).group(1)
     qty = int(re.search(r"^Damaged units: (\d+)", t["body"], re.M).group(1))
     ref = f"TCK-{t['id']}"
-    existing = [a for a in inv.pages("list_adjustments", {"reference": ref}) if a["reason"] == "damage"]
+    existing = [a for a in inv.adjustments(sku=sku, warehouse=wh, reference=ref) if a["reason"] == "damage"]
     delta = -qty - sum(a["delta"] for a in existing)
     if delta == 0:
         note, status = f"Damage already recorded as {existing[0]['id']}.", "resolved"
     elif inv.adjust(sku, wh, delta, "damage", ref):
-        adj = inv.pages("list_adjustments", {"reference": ref})[0]["id"]
+        adj = inv.adjustments(sku=sku, warehouse=wh, reference=ref)[0]["id"]
         note, status = f"Recorded {-delta} damaged units as {adj}.", "resolved"
     else:
         note, status = "Not recorded: insufficient stock in the warehouse.", "pending"

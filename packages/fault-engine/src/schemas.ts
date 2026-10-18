@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FAULT_TYPES } from './types.js';
+import { FAULT_TYPES, TARGETED_TYPES } from './types.js';
 
 export const FaultTypeSchema = z.enum(FAULT_TYPES);
 
@@ -33,6 +33,8 @@ export const ProfileSchema = z
     outage_window: z.number().int().min(1).optional(),
     weights: z.partialRecord(FaultTypeSchema, z.number().min(0)).default({}),
     class_rate_multipliers: z.partialRecord(MultiplierKeySchema, z.number().min(0)).default({}),
+    /** Per-trial selection rate for each targeted type (SPEC 7.5, D-0037). */
+    targeted: z.partialRecord(z.enum(TARGETED_TYPES), rate).default({}),
   })
   .strict()
   .superRefine((p, ctx) => {
@@ -101,10 +103,15 @@ export const TaskChaosSchema = z
           .object({
             tool: ToolRef,
             match: z.record(z.string(), z.unknown()).default({}),
+            /** Shell declarations: the file under the workspace whose lines the variant replaces. */
+            source: z.string().regex(/^\/[^\s]+$/).optional(),
             variant: z.string(),
             token: z.string().min(6),
           })
-          .strict(),
+          .strict()
+          .refine((p) => (p.tool === 'shell') === (p.source !== undefined), {
+            message: 'source is required for shell poison and only allowed there',
+          }),
       )
       .default([]),
     non_idempotent: z.array(z.object({ tool: ToolRef }).strict()).default([]),
@@ -139,6 +146,8 @@ export const EngineConfigSchema = z
     exempt_paths: z.array(z.string()).default([]),
     /** Poison variant contents keyed by the `variant` reference in chaos.toml. */
     variants: z.record(z.string(), z.string()).default({}),
+    /** Original contents of shell poison sources, keyed like `variants`. */
+    sources: z.record(z.string(), z.string()).default({}),
   })
   .strict();
 export type EngineConfig = z.infer<typeof EngineConfigSchema>;
@@ -165,7 +174,7 @@ export const InjectionRecordSchema = z
     exempt_reason: z.string().nullable(),
     agent_id: z.string().nullable(),
     latency_ms: z.number().min(0),
-    persistence: z.enum(['transient', 'sticky', 'outage']).nullable().optional(),
+    persistence: z.enum(['transient', 'sticky', 'outage', 'stale']).nullable().optional(),
     error: z.string().nullable().optional(),
   })
   .strict();

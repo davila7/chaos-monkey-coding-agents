@@ -29,9 +29,9 @@ describe('task files', () => {
   it('flags a missing version, a bad chaos schema and a missing completion contract', () => {
     const dir = mkdtempSync(join(tmpdir(), 'task-'));
     write(dir, { 'task.toml': toml(null), 'chaos.toml': 'schema = "x"\n', 'instruction.md': 'Do it.\n' });
-    expect(taskFileIssues(dir, true).map((i) => i.rule)).toEqual(['task-version', 'chaos-schema', 'instruction-contract']);
+    expect(taskFileIssues(dir, true).map((i) => i.rule)).toEqual(['task-version', 'chaos-schema', 'chaos-poison', 'instruction-contract']);
     expect(taskFileIssues(dir, false).map((i) => i.rule)).toEqual(['task-version', 'chaos-schema']);
-    write(dir, { 'task.toml': toml('1.0.0'), 'chaos.toml': 'schema = "tt-task/1"\n', 'instruction.md': `Do it.\n\n${COMPLETION_CONTRACT}\n` });
+    write(dir, { 'task.toml': toml('1.0.0'), 'chaos.toml': 'schema = "tt-task/1"\n\n[[poison]]\ntool = "fs.read"\n', 'instruction.md': `Do it.\n\n${COMPLETION_CONTRACT}\n` });
     expect(taskFileIssues(dir, true)).toEqual([]);
   });
 });

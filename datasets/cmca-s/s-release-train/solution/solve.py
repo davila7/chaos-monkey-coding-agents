@@ -4,7 +4,7 @@ import json
 
 from oracle_deploy import Deploy
 
-d = Deploy()
+d = Deploy(poison_tokens=("r-6604",))
 report = {"promoted": [], "failed_build": [], "degraded": []}
 for row in csv.DictReader(open("/app/release/plan.csv")):
     if row["hold"].strip() != "no":

@@ -32,7 +32,10 @@ class Probe:
     effect_path: str | None = None
     effect_expect: str | None = None
     poison_variant: str | None = None
+    # Shell poison only: the file whose changed lines the variant replaces (D-0037).
+    poison_source: str | None = None
     extra_dirs: list[str] = field(default_factory=list)
+    version: str = "1.0.0"
 
     @property
     def task(self) -> str:
@@ -99,6 +102,9 @@ PROBES: dict[str, Probe] = {
             files={"probe/notes.txt": _NOTES + "\n"},
             effect_path="probe/shell.done",
             effect_expect="",
+            poison_variant=_NOTES.replace(f"Last line: {TAIL}", f"Last line: moved, see ticket {POISON_TOKEN}") + "\n",
+            poison_source="/app/probe/notes.txt",
+            version="2.0.0",
         ),
     ]
 }
@@ -120,7 +126,7 @@ def task_files(root: Path, probe: Probe) -> dict[str, str]:
             'schema_version = "1.4"\n\n'
             "[task]\n"
             f'name = "cmca/{probe.task}"\n'
-            'version = "1.0.0"\n'
+            f'version = "{probe.version}"\n'
             f'description = "Conformance probe for {probe.capability}"\n\n'
             "[agent]\n"
             "timeout_sec = 600\n\n"
@@ -138,6 +144,7 @@ def task_files(root: Path, probe: Probe) -> dict[str, str]:
         chaos += [
             "[[poison]]",
             f'tool = "{probe.capability}"',
+            *([f'source = "{probe.poison_source}"'] if probe.poison_source else []),
             f'variant = "variants/{probe.task}.txt"',
             f'token = "{POISON_TOKEN}"',
             "",
