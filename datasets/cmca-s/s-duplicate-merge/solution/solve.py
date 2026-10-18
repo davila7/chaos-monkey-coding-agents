@@ -5,10 +5,10 @@ from collections import defaultdict
 
 from oracle_client import Client
 
-c = Client()
+c = Client(poison_tokens=("DM-5531",))
 groups = defaultdict(list)
 for row in c.search_all(status="open", team="billing"):
-    t = c.ticket(row["id"])
+    t = c.ticket(row["id"], row)
     m = re.search(r"^Order:\s*(\S+)", t["body"], re.M)
     if m:
         groups[(t["customer"], m.group(1))].append(t["id"])
