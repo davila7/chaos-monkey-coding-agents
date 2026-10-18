@@ -1,4 +1,4 @@
-The `tally` command line tool in /app (run it from /app with `python -m tally`) needs a new `export` command that writes the records of a collection as CSV text. The specification is /app/docs/export.md; read /app/docs/overview.md and /app/docs/conventions.md for how the code base is organised.
+The `tally` command line tool in /app (run it from /app with `python -m tally`) needs a new `export` command that writes the records of a collection as CSV text. A contributor started the command in /app/tally and left it unfinished; finish it so that it follows the specification. The specification is /app/docs/export.md; read /app/docs/overview.md and /app/docs/conventions.md for how the code base is organised.
 
 Put all code under /app/tally. The unit tests run from /app with:
 

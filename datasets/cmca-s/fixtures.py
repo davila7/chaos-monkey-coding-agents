@@ -260,6 +260,10 @@ def outputs() -> dict[Path, str]:
     f, e = fixtures_deploy.incident_rollback()
     files[ROOT / "s-incident-rollback/environment/deploy/fixture.json"] = dump(f)
     expected("s-incident-rollback", e)
+    # Version 2.0.0 of the task, kept in reserve (D-0036 item 2).
+    f, e = fixtures_deploy.incident_rollback_handover()
+    files[ROOT / "reserve/s-incident-rollback/environment/deploy/fixture.json"] = dump(f)
+    expected("reserve/s-incident-rollback", e)
     f, p = fixtures_docs.client_retry()
     files[ROOT / "s-client-retry/environment/docs/fixture.json"] = dump(f)
     files[ROOT / "s-client-retry/variants/doc.json"] = fixtures_docs.dumps_variant(p["variant"])
@@ -277,7 +281,7 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-change-release/environment/docs/fixture.json"] = dump(dc)
     expected("s-change-release", e)
     client = (ROOT / "oracle_client.py").read_text()
-    for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
+    for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS, "reserve/s-incident-rollback"):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
     for task in INVENTORY_TASKS:
@@ -286,7 +290,7 @@ def outputs() -> dict[Path, str]:
     for task in DOCS_TASKS:
         files[ROOT / task / "solution/oracle_docs.py"] = helper
     helper = (ROOT / "oracle_deploy.py").read_text()
-    for task in DEPLOY_TASKS:
+    for task in (*DEPLOY_TASKS, "reserve/s-incident-rollback"):
         files[ROOT / task / "solution/oracle_deploy.py"] = helper
     return files
 
