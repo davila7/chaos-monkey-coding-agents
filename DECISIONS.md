@@ -1062,3 +1062,14 @@ Progress:
   - `ChaosPi` and `ChaosOpenCode` now honor `extra_ca_cert` (CA appended to the system bundle before install, `NODE_EXTRA_CA_CERTS` for install and run); without it the Pi install failed in the cloud sandbox with curl error 60 (V-24).
   - `pi-claude` 11 of 11, $0.0521 (`results/conformance-s/2026-10-18-probes-pi-claude/`); `opencode-claude` 11 of 11, $0.0781 (`results/conformance-s/2026-10-18-probes-opencode-claude/`). Every probed call was exposed, logged and delivered, one call per cell, no retry of a faulted call. V-24 and V-25 closed.
   - Item 6 spend so far: $0.1302 of $6. The cost gate waits for the owner on the item 2 parity notes (Pi effort `high` plus `medium`, `display: "summarized"`, OpenCode's title request).
+- Item 7.3 (2026-10-18), cost gate. The owner chose to run it with the item 2 differences recorded as parity notes on the board (decision card, 2026-10-18 16:07 UTC).
+  - Evidence: `results/smoke/2026-10-18-track-s-pi-oc/` (trials, `commands.txt`, `summary.json`), seed `gate-2026-10-18`, no infra failures.
+
+    | Config | clean | moderate | Cost (20 trials) | Mean per trial |
+    |---|---|---|---|---|
+    | `pi-claude` | 5/5 | 3/5 | $0.7924 | $0.0792 |
+    | `opencode-claude` | 5/5 | 4/5 | $0.8538 | $0.0854 |
+
+  - Failures under `moderate`: `s-p1-report` for both configs, where the agent reported ticket 211 under the stale team from its record (both summaries name the conflict and pick `platform`), the same mechanism as `cc-claude` in D-0037 item 6; and `s-cycle-count` for `pi-claude`. 41 faults applied across the 10 moderate trials.
+  - Projected M5 Track S cost per config (SPEC 20: 12 tasks x 2 profiles x n = 3 = 72 trials, 10% reruns, mean of these 5 tasks): `pi-claude` $6.28, `opencode-claude` $6.76. Track N cost for these two configs is not measured by this gate.
+  - Item 6 spend: $1.7764 of $6 (probes $0.1302, gate $1.6462).
