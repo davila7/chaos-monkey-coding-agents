@@ -986,8 +986,8 @@ Progress:
     | n-ledger-fix | 5 | 5 | 4 |
     | n-make-build | 5 | 1 | 0 |
     | n-port-conflict | 5 | 5 | 5 |
-    | s-cycle-count | 5 | 3 | 5 |
-    | s-followups | 3 | 5 | 4 |
+    | s-cycle-count | 3 | 3 | 5 |
+    | s-followups | 5 | 5 | 4 |
     | s-p1-report | 5 | 3 | 0 |
     | total | 28 of 30 | 22 of 30 | 18 of 30 |
 
