@@ -155,6 +155,27 @@ def test_extra_ca_cert_is_uploaded_and_exposed_to_node(tmp_path: Path):
     assert asyncio.run(ChaosClaudeCode(logs_dir=tmp_path, model_name="m")._ca_env(env)) == {}
 
 
+
+@pytest.mark.parametrize("cls", [ChaosPi, ChaosOpenCode])
+def test_pi_and_opencode_trust_extra_ca_cert_in_node_and_system_bundle(tmp_path: Path, cls):
+    import asyncio
+
+    pem = tmp_path / "ca.pem"
+    pem.write_text("-----BEGIN CERTIFICATE-----\n")
+    env = _RecordingEnv()
+    agent = cls(logs_dir=tmp_path, model_name="anthropic/m", extra_ca_cert=str(pem))
+    commands = []
+
+    async def fake_root(environment, command, **_):
+        commands.append(command)
+
+    agent.exec_as_root = fake_root
+    assert asyncio.run(agent._ca_env_and_system_bundle(env)) == {"NODE_EXTRA_CA_CERTS": "/opt/tt/ca.crt"}
+    assert any(">> /etc/ssl/certs/ca-certificates.crt" in c for c in commands)
+    commands.clear()
+    assert asyncio.run(cls(logs_dir=tmp_path, model_name="anthropic/m")._ca_env_and_system_bundle(env)) == {}
+    assert commands == []
+
 def _tickets_server():
     from harbor.models.task.config import MCPServerConfig
 

@@ -24,8 +24,15 @@ class ChaosOpenCode(TtAgentMixin, OpenCode):
     def name() -> str:
         return "chaos-opencode"
 
+    async def install(self, environment) -> None:
+        # The system bundle must exist before the CA is appended to it.
+        await self.ensure_system_dependencies(environment, ("curl", "bash", "coreutils", "nodejs", "npm"))
+        ca = await self._ca_env_and_system_bundle(environment)
+        with environment.scoped_exec_env(ca):
+            await super().install(environment)
+
     async def run(self, instruction, environment, context) -> None:
-        env = await self._tt_prepare(environment)
+        env = await self._tt_prepare(environment) | await self._ca_env(environment)
         with environment.scoped_exec_env(env):
             await super().run(instruction, environment, context)
 

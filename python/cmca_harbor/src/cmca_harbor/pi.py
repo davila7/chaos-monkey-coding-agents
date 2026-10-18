@@ -81,7 +81,9 @@ class ChaosPi(TtAgentMixin, Pi):
 
     async def install(self, environment) -> None:
         await self.ensure_system_dependencies(environment, ("curl",))
-        await self.exec_as_agent(environment, command=self.install_command())
+        ca = await self._ca_env_and_system_bundle(environment)
+        with environment.scoped_exec_env(ca):
+            await self.exec_as_agent(environment, command=self.install_command())
 
     def _build_mcp_config(self) -> dict[str, Any]:
         # Direct exposure declares MCP tools to the model like built-in tools,
@@ -97,7 +99,7 @@ class ChaosPi(TtAgentMixin, Pi):
         return {"autoEnableCodemode": False, "mcpServers": servers}
 
     async def run(self, instruction, environment, context) -> None:
-        env = await self._tt_prepare(environment)
+        env = await self._tt_prepare(environment) | await self._ca_env(environment)
         servers = self.mcp_servers
         if servers:
             await self._write_mcp_config(environment)
