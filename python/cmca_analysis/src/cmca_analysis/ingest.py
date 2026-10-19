@@ -9,8 +9,12 @@ The fault log is `agent/tt/events.jsonl` on Track N and the gateway's
 
 from __future__ import annotations
 
+import functools
 import json
 import re
+import subprocess
+import sys
+import tempfile
 import tomllib
 from collections import Counter
 from dataclasses import dataclass, field
@@ -139,10 +143,49 @@ class TaskDecl:
     poison: list[dict[str, Any]] = field(default_factory=list)
     non_idempotent: set[str] = field(default_factory=set)
     alternatives: dict[str, set[str]] = field(default_factory=dict)
+    # (original, stale) line pairs of every shell poison declaration (D-0037).
+    stale: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def token(self) -> str | None:
         return self.poison[0]["token"] if self.poison else None
+
+
+@functools.cache
+def _generated(build: Path) -> Path:
+    """Output of a task's `environment/gen/build.py`, which some Track N images run to build /app."""
+    out = Path(tempfile.mkdtemp(prefix="tt-gen-"))
+    subprocess.run([sys.executable, str(build), str(out / "app")], check=True, capture_output=True)
+    return out / "app"
+
+
+def source_text(task_dir: Path, rel: str) -> str:
+    """A file as it is under /app in the task image: copied from environment/, or generated."""
+    direct = task_dir / "environment" / rel
+    if direct.exists():
+        return direct.read_text()
+    build = task_dir / "environment/gen/build.py"
+    if build.exists():
+        return (_generated(build.resolve()) / rel).read_text()
+    raise FileNotFoundError(direct)
+
+
+def stale_lines(original: str, variant: str) -> list[tuple[str, str]]:
+    """The lines shell poison replaces, as fault-engine `staleLines` computes them."""
+    a, b = original.split("\n"), variant.split("\n")
+    if len(a) != len(b):
+        return []
+    return [(x, y) for x, y in zip(a, b) if x != y and x != ""]
+
+
+def shell_stale(task_dir: Path, poison: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for p in poison:
+        source = p.get("source")
+        if p.get("tool") == "shell" and isinstance(source, str):
+            variant = (task_dir / p["variant"]).read_text()
+            pairs += stale_lines(source_text(task_dir, source.removeprefix("/app/")), variant)
+    return pairs
 
 
 def task_decls(datasets: tuple[Path, ...] | list[Path]) -> dict[str, TaskDecl]:
@@ -150,10 +193,12 @@ def task_decls(datasets: tuple[Path, ...] | list[Path]) -> dict[str, TaskDecl]:
     for dataset in datasets:
         for chaos in sorted(Path(dataset).glob("*/chaos.toml")):
             data = tomllib.loads(chaos.read_text())
+            poison = data.get("poison", [])
             out[chaos.parent.name] = TaskDecl(
-                poison=data.get("poison", []),
+                poison=poison,
                 non_idempotent={d["tool"] for d in data.get("non_idempotent", [])},
                 alternatives={a["tool"]: set(a.get("via", [])) for a in data.get("alternatives", [])},
+                stale=shell_stale(chaos.parent, poison),
             )
     return out
 

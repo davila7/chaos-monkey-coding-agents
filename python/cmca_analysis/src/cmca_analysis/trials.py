@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, read_status
+from .ingest import CATALOG_PATH, ELIGIBLE, TaskDecl, read_status, task_decls
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -87,7 +87,7 @@ def _profile(kwargs: dict[str, Any], job: str) -> str:
     return m.group(1) if m else "none"
 
 
-def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]) -> dict[str, Any]:
     config = _json(trial / "config.json") or {}
     result = _json(trial / "result.json") or {}
     kwargs = (config.get("agent") or {}).get("kwargs") or {}
@@ -98,13 +98,13 @@ def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dic
     events = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()] if events_path.exists() else []
     joined_calls = _join(events, tool_calls(_json(trial / "agent/trajectory.json")))
     joined = [(e, c[1] if c else None) for e, c in joined_calls]
-    decls = poison.get(task, [])
-    token = decls[0]["token"] if decls else None
+    decl = decls.get(task, TaskDecl())
+    token = decl.token
     faults = []
     for e, obs in joined:
         if e.get("decision") != "apply":
             continue
-        ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token)
+        ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token, decl.stale)
         faults.append({"type": e["type"], "capability": e["capability"], "payload_id": e.get("payload_id"), "delivered": ok, "joined": obs is not None})
     reward_txt = trial / "verifier/reward.txt"
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
@@ -126,7 +126,7 @@ def load_trial(trial: Path, payloads: dict[str, str], poison: dict[str, list[dic
         "output_tokens": agent.get("n_output_tokens"),
         "eligible_calls": sum(1 for e in events if e.get("decision") in ELIGIBLE),
         "exposure": dict(sorted(Counter(e.get("capability") or "" for e in events if e.get("decision") in ELIGIBLE).items())),
-        "poison_eligible": poison_eligible(joined_calls, decls) if decls else None,
+        "poison_eligible": poison_eligible(joined_calls, decl.poison) if decl.poison else None,
         "faults": faults,
         "status": read_status(trial / "verifier/STATUS.json"),
         "poison_propagated": bool(token) and any(f["type"] == "poison" for f in faults) and token in verifier_text,
@@ -171,24 +171,11 @@ def summarize_profile(trials: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def poison_decls(dataset: Path | None) -> dict[str, list[dict[str, Any]]]:
-    if dataset is None:
-        return {}
-    import tomllib
-
-    out = {}
-    for chaos in sorted(dataset.glob("*/chaos.toml")):
-        decls = tomllib.loads(chaos.read_text()).get("poison", [])
-        if decls:
-            out[chaos.parent.name] = decls
-    return out
-
-
 def summarize(evidence: Path, dataset: Path | None = None) -> dict[str, Any]:
     payloads = {e["id"]: e.get("text") or "" for e in json.loads(CATALOG_PATH.read_text())}
-    poison = poison_decls(dataset)
+    decls = task_decls([dataset]) if dataset is not None else {}
     trials = [
-        load_trial(t, payloads, poison)
+        load_trial(t, payloads, decls)
         for job in sorted(p for p in evidence.iterdir() if p.is_dir())
         for t in sorted(p for p in job.iterdir() if p.is_dir() and (p / "config.json").exists())
     ]

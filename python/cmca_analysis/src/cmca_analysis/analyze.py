@@ -295,7 +295,7 @@ def analyze(
         for d in trial_dirs(ev):
             t = load_trial(d, ev, decls, settled)
             decl = decls.get(t.task, TaskDecl())
-            reconcile(t, payloads, decl.token)
+            reconcile(t, payloads, decl.token, decl.stale)
             t.problems = validate(t, d)
             analyses[t.path] = analyze_trial(t, decl, rules)
             trials.append(t)

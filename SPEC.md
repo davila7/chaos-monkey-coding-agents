@@ -871,7 +871,7 @@ Every milestone starts with a written plan in `DECISIONS.md` and waits for the o
 | **M2 Track S foundation** | Mock services, MCP fault proxy, 12 pilot Track S tasks, fx ATIF converter, Antigravity Track S support | `oracle` passes clean and under all profiles; `nop` scores 0; all six configs complete a smoke run; V-05, V-07, V-09, V-13, V-14 closed |
 | **M3 Native-pair injectors** | Codex and Antigravity injectors, 12 pilot Track N tasks | Conformance done for all five native harnesses; V-02, V-03, V-04 closed |
 | **M4 Analysis** | Ingest, validation, reconciliation, classification, metrics, bootstrap, report and row generation, fixtures | Snapshot tests byte-identical; every metric in section 11 implemented with unit tests; V-16 closed |
-| **M5 Pilot run** | About 576 trials (section 20), pilot report, calibration, power analysis, ABC review | Requires owner approval of budget before start. Injection fidelity at least 99%; infra failure under 5%; tasks recalibrated; `n` and task counts confirmed; V-17 closed |
+| **M5 Pilot run** | 504 trials (section 20), pilot report, calibration, power analysis, ABC review | Requires owner approval of budget before start. Injection fidelity at least 99%; infra failure under 5%; tasks recalibrated; `n` and task counts confirmed; V-17 closed |
 | **M6 Scale and freeze** | 40 + 40 tasks plus private holdout, pre-registration tag, full run, analysis | Validation pipeline green for every task; full run complete with exclusions under 3%; results reproducible from manifests |
 | **M7 Public release** | Registry datasets, Hub leaderboards, site, documentation set, submission flow, vendor disclosures | Every number on the site traces to a committed artifact; quickstart verified on a clean machine; V-15, V-19, V-20 closed |
 
@@ -884,7 +884,7 @@ cost   = trials x mean_cost_per_trial x (1 + rerun_allowance)
 
 - Planning prior: HAL reported about $40,000 for 21,730 rollouts across its benchmarks, roughly $1.84 per rollout. CMCA trials are expected to be cheaper per trial but this MUST be measured, not assumed.
 - **Cost gate.** Before any run beyond conformance, execute 5 tasks per config under `clean` and `moderate`, compute the observed mean cost per trial per config, and present the projected total to the owner. No run proceeds without approval.
-- Pilot (M5): Track S 12 tasks and Track N 12 tasks, 4 configs (`cc-claude`, `codex-gpt`, `pi-claude`, `opencode-claude`), profiles `clean` and `moderate`, n = 3: 576 trials.
+- Pilot (M5): Track S 12 tasks and Track N 12 tasks, profiles `clean` and `moderate`, n = 3. Track S runs 4 configs (`cc-claude`, `fx-claude`, `pi-claude`, `opencode-claude`) and Track N 3 (`cc-claude`, `pi-claude`, `opencode-claude`): 504 trials. `codex-gpt` and `agy-gemini` join after M3 (D-0039).
 - v1.0 (M6): leaderboard profiles 2,400 trials on Track S (40 x 6 x 2 x 5) and 2,000 on Track N (40 x 5 x 2 x 5); curve profiles 720 on Track S (20 x 6 x 2 x 3) and 600 on Track N (20 x 5 x 2 x 3). Total 5,720 trials before reruns.
 - Default rerun allowance: 10%.
 

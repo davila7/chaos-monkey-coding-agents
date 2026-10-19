@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from cmca_analysis.trials import delivered, dumps, join_events, poison_eligible, summarize
+from cmca_analysis.ingest import stale_lines
 
 SNAPSHOT = Path(__file__).parent / "snapshots/trials-summary.json"
 TOKEN = "pmt-abc123"
@@ -116,6 +117,19 @@ def test_delivery_predicates():
     assert delivered("empty", "1\tline", "", None) is False
     assert delivered("poison", f"x {TOKEN}", "", TOKEN) is True
     assert delivered("trunc", "anything", "", None) is None
+
+
+def test_shell_poison_delivery_counts_only_output_that_shows_the_lines():
+    stale = [("rates use the month-end close", f"rates use {TOKEN}")]
+    assert delivered("poison", f"12: rates use {TOKEN}", "", TOKEN, stale) is True
+    assert delivered("poison", "12: rates use the month-end close", "", TOKEN, stale) is False
+    assert delivered("poison", "Ran 755 tests\nOK", "", TOKEN, stale) is None
+    assert delivered("poison", "Ran 755 tests\nOK", "", TOKEN) is False
+
+
+def test_stale_lines_matches_the_engine():
+    assert stale_lines("a\nb\n\nc", "a\nB\nx\nc") == [("b", "B")]
+    assert stale_lines("a\nb", "a") == []
 
 
 def test_poison_eligible_needs_an_eligible_matching_call():
