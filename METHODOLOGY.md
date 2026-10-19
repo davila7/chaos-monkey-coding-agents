@@ -123,7 +123,7 @@ Analysis package: `cmca-analysis` 0.1.0. `cmca analyze` writes the boards (`site
 - **fx route and publication.**
   - fx uses the Vercel AI Gateway, a different provider route from the other fixed-axis configs.
   - Vercel's Acceptable Use Policy excludes AI Services from the non-Enterprise benchmark permission, and its API Terms require written permission for performance testing (V-17).
-  - `fx-claude` rows are published only after the owner obtains that permission.
+  - The owner chose to publish `fx-claude` rows and to handle the Vercel permission himself (D-0039 progress, 2026-10-19).
 - **Effort and thinking differences.** Pi sends effort `high` at the top level. Pi and OpenCode request summarized thinking where Claude Code omits it. The fixed axis is therefore close to identical, not exactly identical.
 - **Small n.** Three attempts per cell and 12 tasks per track give wide intervals. Model nondeterminism is not averaged away.
 - **Near-ceiling tasks under `clean`.** Most tasks pass under `clean` (D-0036 calibration). Clean pass^1 near 1 leaves Robustness Retention close to Faulted Success, and `clean` differences between configs are small.
