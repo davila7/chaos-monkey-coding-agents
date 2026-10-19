@@ -72,5 +72,33 @@ def test_pinned_reasoning_reaches_harbor(tmp_path):
 
     assert reasoning_kwargs(load_config("cc-claude")) == [("reasoning_effort", "medium")]
     assert reasoning_kwargs(load_config("fx-claude")) == [("reasoning_effort", "medium")]
+    assert reasoning_kwargs(load_config("pi-claude")) == [("reasoning_effort", "medium")]
+    assert reasoning_kwargs(load_config("opencode-claude")) == [("variant", "medium")]
     assert reasoning_kwargs({"model": {"reasoning": "<setting>"}}) == []
     assert reasoning_kwargs({"model": None}) == []
+
+
+def test_harbor_model_adds_the_provider_where_harbor_needs_it():
+    from cmca_harbor.trials import harbor_model, load_config
+
+    assert harbor_model(load_config("cc-claude")) == "claude-sonnet-5-5"
+    assert harbor_model(load_config("fx-claude")) == "anthropic/claude-sonnet-5.5"
+    assert harbor_model(load_config("pi-claude")) == "anthropic/claude-sonnet-5-5"
+    assert harbor_model(load_config("opencode-claude")) == "anthropic/claude-sonnet-5-5"
+    assert harbor_model(load_config("oracle")) is None
+
+
+@pytest.mark.parametrize(
+    "config,agent,reasoning",
+    [("pi-claude", "cmca_harbor:ChaosPi", "reasoning_effort=medium"), ("opencode-claude", "cmca_harbor:ChaosOpenCode", "variant=medium")],
+)
+def test_track_s_plan_for_pi_and_opencode(tmp_path: Path, config, agent, reasoning):
+    dataset = REPO_ROOT / "datasets/cmca-s"
+    cmds = trials.plan(config, "s1", dataset, ["clean", "moderate"], 1, None, tmp_path / "out", Path("jobs"), track="s")
+    assert [c[c.index("--job-name") + 1] for c in cmds] == [f"{config}-clean-a0", f"{config}-moderate-a0"]
+    for c, profile in zip(cmds, ("clean", "moderate")):
+        assert c[:3] == ["env", f"TT_CONFIG_DIR={tmp_path / 'out' / profile}", "TT_ATTEMPT=0"]
+        assert c[c.index("-a") + 1] == agent and c[c.index("-m") + 1] == "anthropic/claude-sonnet-5-5"
+        assert [c[i + 1] for i, a in enumerate(c) if a == "--ak"] == ["attempt_index=0", f"version={trials.load_config(config)['harness']['version']}", reasoning]
+    cfg = json.loads((tmp_path / "out/moderate/s-followups.json").read_text())
+    assert cfg["layer"] == "service" and cfg["parity_set"] == trials.TRACK_S_PARITY

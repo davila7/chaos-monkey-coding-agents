@@ -153,3 +153,91 @@ def test_extra_ca_cert_is_uploaded_and_exposed_to_node(tmp_path: Path):
     assert env.uploads == [(pem, "/opt/tt/ca.crt")]
     assert ChaosClaudeCode(logs_dir=tmp_path, model_name="m").options.extra_ca_cert is None
     assert asyncio.run(ChaosClaudeCode(logs_dir=tmp_path, model_name="m")._ca_env(env)) == {}
+
+
+
+@pytest.mark.parametrize("cls", [ChaosPi, ChaosOpenCode])
+def test_pi_and_opencode_trust_extra_ca_cert_in_node_and_system_bundle(tmp_path: Path, cls):
+    import asyncio
+
+    pem = tmp_path / "ca.pem"
+    pem.write_text("-----BEGIN CERTIFICATE-----\n")
+    env = _RecordingEnv()
+    agent = cls(logs_dir=tmp_path, model_name="anthropic/m", extra_ca_cert=str(pem))
+    commands = []
+
+    async def fake_root(environment, command, **_):
+        commands.append(command)
+
+    agent.exec_as_root = fake_root
+    assert asyncio.run(agent._ca_env_and_system_bundle(env)) == {"NODE_EXTRA_CA_CERTS": "/opt/tt/ca.crt"}
+    assert any(">> /etc/ssl/certs/ca-certificates.crt" in c for c in commands)
+    commands.clear()
+    assert asyncio.run(cls(logs_dir=tmp_path, model_name="anthropic/m")._ca_env_and_system_bundle(env)) == {}
+    assert commands == []
+
+def _tickets_server():
+    from harbor.models.task.config import MCPServerConfig
+
+    return MCPServerConfig(name="tickets", transport="streamable-http", url="http://127.0.0.1:8000/tickets/mcp")
+
+
+def test_pi_mcp_config_declares_every_server_directly(tmp_path: Path):
+    from harbor.models.task.config import MCPServerConfig
+
+    stdio = MCPServerConfig(name="local", transport="stdio", command="srv", args=["-q"])
+    agent = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m", version="1.0.3", mcp_servers=[_tickets_server(), stdio])
+    assert agent._build_mcp_config() == {
+        "autoEnableCodemode": False,
+        "mcpServers": {
+            "tickets": {"url": "http://127.0.0.1:8000/tickets/mcp", "exposure": "direct"},
+            "local": {"command": "srv", "args": ["-q"], "exposure": "direct"},
+        },
+    }
+
+
+def test_pi_install_pins_the_sibling_packages(tmp_path: Path):
+    from cmca_harbor.pi import INSTALL_DIR, PIN_SIBLINGS_JS
+
+    command = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m", version="1.0.3", mcp_servers=[_tickets_server()]).install_command()
+    assert f"cd {INSTALL_DIR} && node -e" in command
+    assert "@earendil-works/pi-coding-agent 1.0.3 && npm install --ignore-scripts" in command
+    assert "overrides" in PIN_SIBLINGS_JS and command.endswith("pi --version")
+    assert "pi-mcp-adapter" not in command
+    with pytest.raises(ValueError, match="pinned"):
+        ChaosPi(logs_dir=tmp_path, model_name="anthropic/m").install_command()
+
+
+def test_pi_run_skips_the_adapter_and_points_pi_at_its_mcp_json(tmp_path: Path, monkeypatch):
+    import asyncio
+    import contextlib
+
+    from harbor.agents.installed.pi import Pi
+
+    agent = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m", version="1.0.3", mcp_servers=[_tickets_server()])
+    seen = {}
+
+    async def write(environment):
+        seen["config"] = agent._build_mcp_config()
+
+    async def run(self, instruction, environment, context):
+        seen["servers_during_run"] = list(self.mcp_servers)
+
+    class Env:
+        @contextlib.contextmanager
+        def scoped_exec_env(self, env):
+            seen["env"] = dict(env)
+            yield
+
+    agent._write_mcp_config = write
+    monkeypatch.setattr(Pi, "run", run)
+    asyncio.run(agent.run("go", Env(), None))
+    assert seen["servers_during_run"] == []
+    assert seen["env"] == {"PI_CODING_AGENT_DIR": "/tmp/harbor-pi-agent"}
+    assert seen["config"]["mcpServers"]["tickets"]["exposure"] == "direct"
+    assert [s.name for s in agent.mcp_servers] == ["tickets"]
+
+    seen.clear()
+    plain = ChaosPi(logs_dir=tmp_path, model_name="anthropic/m", version="1.0.3")
+    asyncio.run(plain.run("go", Env(), None))
+    assert seen == {"servers_during_run": [], "env": {}}

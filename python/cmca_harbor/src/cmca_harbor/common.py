@@ -124,6 +124,19 @@ class TtAgentMixin:
         await self.exec_as_root(environment, command=f"chmod a+r {REMOTE_CA}")
         return {"NODE_EXTRA_CA_CERTS": REMOTE_CA}
 
+    async def _ca_env_and_system_bundle(self, environment) -> dict[str, str]:
+        """`_ca_env`, plus the CA appended to the system bundle for curl and
+        for binaries that read it instead of NODE_EXTRA_CA_CERTS."""
+        ca = await self._ca_env(environment)
+        if ca:
+            bundle = "/etc/ssl/certs/ca-certificates.crt"
+            marker = f"{REMOTE_ROOT}/ca-appended"
+            await self.exec_as_root(
+                environment,
+                command=f"if [ -f {bundle} ] && [ ! -e {marker} ]; then cat {REMOTE_CA} >> {bundle} && touch {marker}; fi",
+            )
+        return ca
+
     def _tt_metadata(self, context) -> None:
         events = read_events(self.logs_dir)
         metadata = dict(context.metadata or {})
