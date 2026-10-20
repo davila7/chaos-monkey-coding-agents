@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Sequence
 
-from .ingest import Trial, content_text
+from .ingest import Trial, bare_name, content_text
 
 TEXT_TYPES = {"deny", "err", "falsefail"}
 _EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", re.I)
+# fault-engine LINE_PREFIX: what `cat -n`, `grep -n` and `grep` over several files put before a line.
+_LINE_PREFIX = re.compile(r"(\s*\d+\t|\d+[:-]|[^\t\n]*?:(\d+[:-])?)")
+
+
+def shows_line(observation: str, line: str) -> bool:
+    """Whether some output line is `line`, whole or after a prefix: the lines fault-engine replaceStaleLines rewrites."""
+    for out in observation.split("\n"):
+        out = out.removesuffix("\r")
+        if out == line or (out.endswith(line) and _LINE_PREFIX.fullmatch(out[: len(out) - len(line)])):
+            return True
+    return False
 
 
 def mcp_text(observation: str) -> str:
@@ -38,8 +50,9 @@ def delivered(
         if token and token in observation:
             return True
         # Shell poison replaces only the declared lines the output shows (D-0037), so a
-        # matching command whose output shows none of them had nothing to deliver.
-        if stale and not any(original in observation for original, _ in stale):
+        # matching command whose output shows none of them had nothing to deliver. Output
+        # that reshapes a line (`cat -A`, a quoted repr) does not show it.
+        if stale and not any(shows_line(observation, original) for original, _ in stale):
             return None
         return False
     # trunc needs the untruncated output to compare against, which is not logged; drift
@@ -58,10 +71,32 @@ def attribution_visible(fault_type: str, observation: str, payload: str) -> bool
 
 
 def reconcile(trial: Trial, payloads: dict[str, str], token: str | None, stale: Sequence[tuple[str, str]] = ()) -> None:
+    # Fewer trajectory calls than fault-log records for a tool means the harness left calls
+    # out of its trajectory, so order no longer pairs records with calls for that tool.
+    logged = Counter(bare_name(e.get("tool_name") or "") for e in trial.events)
+    recorded = Counter(c.name for c in trial.calls)
+    unpaired = {name for name, n in logged.items() if n > recorded[name]}
+    taken = {f.call for f in trial.faults if f.call is not None}
     for f in trial.faults:
         if f.call is None:
             continue
-        obs = trial.calls[f.call].observation
+        call = trial.calls[f.call]
         payload = payloads.get(f.payload_id or "", "")
-        f.delivered = delivered(f.type, obs, payload, token, stale)
-        f.attribution_visible = attribution_visible(f.type, obs, payload) if f.delivered else None
+        if call.name in unpaired:
+            f.delivered = None
+            f.attribution_visible = None
+            continue
+        f.delivered = delivered(f.type, call.observation, payload, token, stale)
+        if f.delivered is False:
+            # Calls issued in one step can reach the injector in either order, so the
+            # fault may belong to another call of the same tool in that step.
+            for c in trial.calls:
+                if (
+                    c.index not in taken and c.step == call.step and c.name == call.name
+                    and delivered(f.type, c.observation, payload, token, stale)
+                ):
+                    taken.discard(f.call)
+                    taken.add(c.index)
+                    f.call, f.step_id, call, f.delivered = c.index, c.step_id, c, True
+                    break
+        f.attribution_visible = attribution_visible(f.type, call.observation, payload) if f.delivered else None

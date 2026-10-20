@@ -1,6 +1,6 @@
 import pytest
 
-from cmca_analysis.stats import bootstrap, holm, paired_permutation, quantile, rank_bands, resample
+from cmca_analysis.stats import bootstrap, holm, paired_permutation, paired_power, quantile, rank_bands, resample, within_variance
 
 
 def test_quantile_linear_interpolation():
@@ -60,3 +60,16 @@ def test_rank_bands_match_site_rule():
         {"value": 0.68, "lo": 0.6, "hi": 0.72},
     ]
     assert rank_bands(iv) == [1, 1, 2, 1]
+
+
+def test_within_variance_pools_tasks_with_two_or_more_attempts():
+    assert within_variance([[1, 0], [1, 1], [1]]) == pytest.approx(0.25)
+    assert within_variance([[1]]) is None
+
+
+def test_paired_power_splits_attempt_noise_from_task_differences():
+    p = paired_power([[1, 0], [1, 0]], [[1, 1], [1, 1]])
+    assert p["between_task_variance"] == 0.0 and p["within_task_variance"] == {"a": 0.5, "b": 0.0}
+    assert p["mdd"] == pytest.approx(0.99051, abs=1e-4)
+    assert p["tasks_needed"] == {"3": 131, "5": 79, "10": 40}
+    assert paired_power([[1, 1, 1]], [[0, 0, 0]]) is None

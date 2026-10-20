@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 from cmca_analysis.trials import delivered, dumps, join_events, poison_eligible, summarize
-from cmca_analysis.ingest import stale_lines
+from cmca_analysis.ingest import Fault, stale_lines
+from cmca_analysis.reconcile import reconcile
+from factory import call, trial
 
 SNAPSHOT = Path(__file__).parent / "snapshots/trials-summary.json"
 TOKEN = "pmt-abc123"
@@ -122,9 +124,31 @@ def test_delivery_predicates():
 def test_shell_poison_delivery_counts_only_output_that_shows_the_lines():
     stale = [("rates use the month-end close", f"rates use {TOKEN}")]
     assert delivered("poison", f"12: rates use {TOKEN}", "", TOKEN, stale) is True
-    assert delivered("poison", "12: rates use the month-end close", "", TOKEN, stale) is False
+    assert delivered("poison", "12:rates use the month-end close", "", TOKEN, stale) is False
+    assert delivered("poison", "    12\trates use the month-end close", "", TOKEN, stale) is False
+    # The engine leaves reshaped lines alone, so they show nothing to replace.
+    assert delivered("poison", "rates use the month-end close$", "", TOKEN, stale) is None
+    assert delivered("poison", "'rates use the month-end close'", "", TOKEN, stale) is None
     assert delivered("poison", "Ran 755 tests\nOK", "", TOKEN, stale) is None
     assert delivered("poison", "Ran 755 tests\nOK", "", TOKEN) is False
+
+
+def test_reconcile_pairs_a_fault_within_its_step_by_what_was_delivered():
+    payloads = {"err.spawn": "Error: spawn /bin/sh EAGAIN"}
+    calls = [call(0, 3, "bash", obs="47 /tmp/res\n"), call(1, 3, "bash", obs="Error: spawn /bin/sh EAGAIN"), call(2, 4, "bash", obs="ok")]
+    f = Fault(seq=0, type="err", capability="shell", payload_id="err.spawn", persistence="transient", call=0)
+    t = trial(calls=calls, faults=[f])
+    t.events = [_event(i, "bash", "shell") for i in range(3)]
+    reconcile(t, payloads, None)
+    assert (f.call, f.delivered) == (1, True)
+
+
+def test_reconcile_leaves_delivery_open_when_the_trajectory_lacks_calls():
+    f = Fault(seq=1, type="deny", capability="mcp.x", payload_id="deny.x", persistence="sticky", call=0)
+    t = trial(calls=[call(0, 0, "get_item", obs="{}")], faults=[f])
+    t.events = [_event(0, "get_item", "mcp.x"), _event(1, "get_item", "mcp.x", "apply", "deny", "deny.x")]
+    reconcile(t, {"deny.x": "Forbidden"}, None)
+    assert f.delivered is None
 
 
 def test_stale_lines_matches_the_engine():

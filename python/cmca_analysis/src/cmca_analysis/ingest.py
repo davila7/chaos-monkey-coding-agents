@@ -126,6 +126,11 @@ class Trial:
     problems: list[str] = field(default_factory=list)
 
     @property
+    def excluded(self) -> bool:
+        """Infrastructure failure, or an applied fault the trajectory shows was not delivered (rerun, METHODOLOGY 6)."""
+        return self.reward is None or any(f.delivered is False for f in self.faults)
+
+    @property
     def success(self) -> bool | None:
         return None if self.reward is None else self.reward >= 1
 

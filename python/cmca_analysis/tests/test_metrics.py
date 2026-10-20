@@ -103,10 +103,20 @@ def test_event_outcomes_recovery_and_pathology_rates():
 def test_validity():
     ts = [
         trial(faults=[fault(0, delivered=True), fault(1, delivered=None), fault(None, delivered=None)]),
-        trial(reward=None, exception_type="AgentSetupTimeoutError"),
-        trial(reward=0.0, exception_type="AgentTimeoutError"),
+        trial(task="t2", reward=None, exception_type="AgentSetupTimeoutError"),
+        trial(task="t3", reward=0.0, exception_type="AgentTimeoutError"),
     ]
     v = m.validity(ts)
     assert v["faults_applied"] == 3 and v["faults_unjoined"] == 1
     assert v["injection_fidelity"] == 1.0 and v["delivery_verifiable"] == 1
     assert v["infra_failures"] == 1 and v["budget_exhausted"] == 1 and v["excluded"] == 1
+
+
+def test_a_trial_with_an_undelivered_fault_is_excluded():
+    ts = [trial(faults=[fault(0, delivered=False)]), trial(task="t2", faults=[fault(0, delivered=None)])]
+    assert [t.excluded for t in ts] == [True, False]
+    v = m.validity(ts)
+    assert v["undelivered"] == 1 and v["excluded"] == 1 and v["replaced"] == 0 and v["injection_fidelity"] == 0.0
+    rerun = trial(name="rerun", faults=[fault(0, delivered=True)])
+    v = m.validity([*ts, rerun])
+    assert v["excluded"] == 0 and v["replaced"] == 1

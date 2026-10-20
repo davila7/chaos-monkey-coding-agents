@@ -32,7 +32,7 @@ describe('analysis output', () => {
     const snapshot = join(process.cwd(), '../../python/cmca_analysis/tests/snapshots/release.json');
     const data = SiteData.parse(JSON.parse(readFileSync(snapshot, 'utf8')).site);
     expect(data.kind).toBe('release');
-    expect(data.boards.map((b) => b.id)).toEqual(['track-s', 'track-n-fixed', 'track-n-native']);
+    expect(data.boards.map((b) => b.id)).toEqual(['track-s', 'track-n-fixed']);
     expect(data.not_measurable).toContainEqual(expect.objectContaining({ board: 'track-n-fixed', config_id: 'fx-claude' }));
   });
 });

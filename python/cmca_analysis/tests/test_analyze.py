@@ -118,7 +118,9 @@ def test_synthetic_release_end_to_end(tmp_path: Path):
     assert s["profiles"]["moderate"]["cost_sources"] == ["settled-usage.json"] and s["profiles"]["moderate"]["cost_usd_total"] == 0.3
 
     site = rel.site
-    assert [b["id"] for b in site["boards"]] == ["track-s", "track-n-fixed", "track-n-native"]
+    # One native-axis config is not a native pairs board yet.
+    assert [b["id"] for b in site["boards"]] == ["track-s", "track-n-fixed"]
+    assert "track-n-native" in rel.boards
     assert [(x["board"], x["config_id"]) for x in site["not_measurable"]] == [("track-n-fixed", "fx-claude")]
     row = site["boards"][1]["rows"][0]
     assert row["config_id"] == "cc-claude" and row["metrics"]["poison_propagation_rate"]["value"] == 1.0
