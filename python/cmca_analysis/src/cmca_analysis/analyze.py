@@ -25,7 +25,7 @@ from .classify import TrialAnalysis, analyze_trial
 from .ingest import DATASETS, REPO_ROOT, TaskDecl, Trial, load_trial, payload_texts, settled_costs, task_decls, trial_dirs
 from .reconcile import reconcile
 from .rules import Rules, load_rules
-from .stats import REPLICATES, Unit, bootstrap, holm, paired_permutation, rank_bands
+from .stats import REPLICATES, Unit, bootstrap, holm, paired_permutation, paired_power, rank_bands
 from .validate import validate
 
 SCHEMA = "cmca-config-summary/1"
@@ -105,7 +105,7 @@ def _units(trials: Sequence[Trial]) -> list[Unit[Trial]]:
     out: list[Unit[Trial]] = []
     for task in tasks:
         unit: Unit[Trial] = {}
-        for t in sorted((t for t in trials if t.task == task and t.reward is not None), key=lambda t: (t.attempt or 0, t.trial)):
+        for t in sorted((t for t in trials if t.task == task and not t.excluded), key=lambda t: (t.attempt or 0, t.trial)):
             unit.setdefault(t.profile, []).append(t)
         out.append(unit)
     return out
@@ -133,8 +133,8 @@ def _boot_stats(decls: dict[str, TaskDecl], profiles: Sequence[str]) -> dict[str
 def _profile_summary(
     trials: list[Trial], valid_groups: list[list[Trial]], analyses: dict[str, TrialAnalysis], decls: dict[str, TaskDecl]
 ) -> dict[str, Any]:
-    an = [analyses[t.path] for t in trials]
-    valid = [t for t in trials if t.reward is not None]
+    valid = [t for t in trials if not t.excluded]
+    an = [analyses[t.path] for t in valid]
     poison_d, poison_p = m.poison_propagation(valid, decls)
     dsr_n, dsr_dup = m.duplicate_rate(valid, decls)
     costs = [t.cost_usd for t in trials if t.cost_usd is not None]
@@ -177,8 +177,8 @@ def summarize_config(
     boot = bootstrap(units, _boot_stats(decls, profiles), f"{seed}|{board}|{config_id}", replicates)
     rr, delta = m.retention(_groups(units, "clean"), _groups(units, "moderate"))
     curve_pts = {rates[p]: point[p]["pass1"] for p in CURVE_PROFILES if p in point and p in rates and point[p]["pass1"] is not None}
-    clean = [t for t in trials if t.profile == "clean" and t.reward is not None]
-    moderate = [t for t in trials if t.profile == "moderate" and t.reward is not None]
+    clean = [t for t in trials if t.profile == "clean" and not t.excluded]
+    moderate = [t for t in trials if t.profile == "moderate" and not t.excluded]
     return {
         "schema": SCHEMA,
         "board": board,
@@ -244,7 +244,14 @@ def compare(summaries: dict[str, dict[str, Any]], units: dict[str, list[Unit[Tri
             if ta and tb:
                 diffs.append(m.task_pass1(ta) - m.task_pass1(tb))
         p = paired_permutation(diffs, f"{seed}|{board}|{a}|{b}", replicates)
-        rows.append({"a": a, "b": b, "tasks": len(diffs), "mean_difference": sum(diffs) / len(diffs) if diffs else None, "p": p})
+        outcomes = [
+            ([float(bool(t.success)) for t in ua[task].get("moderate", [])], [float(bool(t.success)) for t in ub[task].get("moderate", [])])
+            for task in sorted(set(ua) & set(ub))
+        ]
+        rows.append({
+            "a": a, "b": b, "tasks": len(diffs), "mean_difference": sum(diffs) / len(diffs) if diffs else None, "p": p,
+            "power": paired_power([x for x, _ in outcomes], [y for _, y in outcomes]),
+        })
     adjusted = holm({f"{r['a']}|{r['b']}": r["p"] for r in rows})
     for r in rows:
         r["p_holm"] = adjusted[f"{r['a']}|{r['b']}"]
@@ -295,7 +302,7 @@ def analyze(
         for d in trial_dirs(ev):
             t = load_trial(d, ev, decls, settled)
             decl = decls.get(t.task, TaskDecl())
-            reconcile(t, payloads, decl.token)
+            reconcile(t, payloads, decl.token, decl.stale)
             t.problems = validate(t, d)
             analyses[t.path] = analyze_trial(t, decl, rules)
             trials.append(t)
@@ -333,7 +340,8 @@ def analyze(
             "bands": {r["config_id"]: b for r, b in zip(rows, bands)},
             "comparisons": comparisons,
         }
-        if mine:
+        # Native pairs compare vendors' own harness and model; one config is not a pair yet (METHODOLOGY 7).
+        if mine and not (board == "track-n-native" and len(rows) < 2):
             site_boards.append({"id": board, "title": title, "description": description, "rows": rows})
 
     finished = sorted(t.finished_at for t in trials if t.finished_at)

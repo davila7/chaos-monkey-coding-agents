@@ -120,3 +120,53 @@ def rank_bands(intervals: Sequence[dict[str, float]]) -> list[int]:
             head = c
         bands[i] = band
     return bands
+
+
+Z_ALPHA = 1.959964  # two-sided 5%
+Z_POWER = 0.841621  # 80% power
+
+
+def _var(xs: Sequence[float]) -> float:
+    if len(xs) < 2:
+        return 0.0
+    mu = sum(xs) / len(xs)
+    return sum((x - mu) ** 2 for x in xs) / (len(xs) - 1)
+
+
+def within_variance(tasks: Sequence[Sequence[float]]) -> float | None:
+    """Pooled within-task variance of 0/1 outcomes (unbiased per task, tasks with two or more attempts)."""
+    vs = [_var(ys) for ys in tasks if len(ys) >= 2]
+    return sum(vs) / len(vs) if vs else None
+
+
+def paired_power(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]], mdd: float = 0.10) -> dict[str, Any] | None:
+    """Normal-approximation power of the paired per-task comparison of two configs (SPEC 12).
+
+    `a[i]` and `b[i]` are the 0/1 outcomes of task i. The variance of a per-task difference
+    splits into a between-task part and the attempt noise of both configs, var_w / n each.
+    """
+    pairs = [(x, y) for x, y in zip(a, b) if x and y]
+    if len(pairs) < 2:
+        return None
+    n = sum(len(x) + len(y) for x, y in pairs) / (2 * len(pairs))
+    wa = within_variance([x for x, _ in pairs]) or 0.0
+    wb = within_variance([y for _, y in pairs]) or 0.0
+    diffs = [sum(x) / len(x) - sum(y) / len(y) for x, y in pairs]
+    between = max(0.0, _var(diffs) - (wa + wb) / n)
+    z2 = (Z_ALPHA + Z_POWER) ** 2
+
+    def mdd_at(tasks: int, attempts: float) -> float:
+        return ((z2 * (between + (wa + wb) / attempts)) / tasks) ** 0.5
+
+    def tasks_for(attempts: int) -> int:
+        return max(1, -int(-z2 * (between + (wa + wb) / attempts) // (mdd**2)))
+
+    return {
+        "tasks": len(pairs),
+        "attempts": n,
+        "between_task_variance": between,
+        "within_task_variance": {"a": wa, "b": wb},
+        "mdd": mdd_at(len(pairs), n),
+        "tasks_needed": {str(k): tasks_for(k) for k in (3, 5, 10)},
+        "target_mdd": mdd,
+    }

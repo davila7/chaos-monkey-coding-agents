@@ -189,11 +189,16 @@ def pathology_rates(analyses: Sequence[TrialAnalysis]) -> dict[str, float | None
     return {k: (sum(1 for a in analyses if a.pathologies.get(k)) / n if n else None) for k in keys}
 
 
+def _slot(t: Trial) -> tuple[str, str, str, int | None]:
+    return (t.config_id, t.task, t.profile, t.attempt)
+
+
 def validity(trials: Sequence[Trial]) -> dict[str, Any]:
     """M12: injection fidelity, infrastructure failures, budget exhaustion, exclusions."""
     faults = [f for t in trials for f in t.faults]
     verifiable = [f for f in faults if f.delivered is not None]
     infra = [t for t in trials if t.reward is None]
+    valid_slots = {_slot(t) for t in trials if not t.excluded}
     budget = [t for t in trials if t.exception_type and "Timeout" in t.exception_type and t.reward is not None]
     n = len(trials)
     return {
@@ -207,7 +212,10 @@ def validity(trials: Sequence[Trial]) -> dict[str, Any]:
         "infra_failure_rate": len(infra) / n if n else None,
         "budget_exhausted": len(budget),
         "budget_exhaustion_rate": len(budget) / n if n else None,
-        "excluded": len(infra),
+        "undelivered": sum(1 for t in trials if t.reward is not None and t.excluded),
+        # A rerun replaces an excluded trial when a valid trial exists for its task, profile and attempt.
+        "replaced": sum(1 for t in trials if t.excluded and _slot(t) in valid_slots),
+        "excluded": sum(1 for t in trials if t.excluded and _slot(t) not in valid_slots),
         "trials_with_problems": sum(1 for t in trials if t.problems),
     }
 
