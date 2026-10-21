@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,12 +39,39 @@ PRE_PHASE = {"deny", "err"}
 TEXT_TYPES = {"deny", "err", "falsefail"}
 
 
+_FX_READ = re.compile(r"^<path>.*?</path>\n<content>\n(.*)</content>$", re.S)
+
+
+def fx_inner(tool: str, text: str) -> str:
+    """The tool output inside fx's framing: file lines without numbers, or shell output.
+
+    fx renders an empty file as an empty `<content>` block and an empty command
+    output as `"output_delta": ""` inside its status JSON (V-27), so the delivery
+    checks look inside that framing.
+    """
+    if tool == "read_file":
+        m = _FX_READ.match(text)
+        if m:
+            return "".join(re.sub(r"^\d+ *\t", "", line) for line in m.group(1).splitlines(keepends=True))
+    if tool == "shell":
+        try:
+            o = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(o, dict) and isinstance(o.get("output_delta"), str):
+            return o["output_delta"]
+    return text
+
+
 @dataclass(frozen=True)
 class Harness:
     agent: str
     harness_dir: str
     # Tool names in ATIF trajectories, mapped to capability classes.
     tools: dict[str, str]
+    # Maps (tool, observation) to the output inside harness framing, for the
+    # checks of transformed outputs. None: the observation is the output.
+    inner: Callable[[str, str], str] | None = None
 
 
 HARNESSES = {
@@ -61,6 +89,12 @@ HARNESSES = {
         "cmca_harbor:ChaosOpenCode",
         "oc",
         {"read": "fs.read", "write": "fs.write", "edit": "fs.edit", "grep": "fs.search", "glob": "fs.search", "list": "fs.list", "bash": "shell"},
+    ),
+    "fxh": Harness(
+        "cmca_harbor:ChaosFxh",
+        "fxh",
+        {"read_file": "fs.read", "write_file": "fs.write", "edit_file": "fs.edit", "grep_files": "fs.search", "glob_files": "fs.search", "shell": "shell"},
+        fx_inner,
     ),
 }
 
@@ -180,7 +214,7 @@ def broken_build(build: Path, harness: Harness, out: Path) -> None:
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(build, out)
-    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js"}[harness.harness_dir]
+    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js", "fxh": "index.cjs"}[harness.harness_dir]
     (out / harness.harness_dir / entry).write_text('throw new Error("unavailable");\n')
 
 
@@ -269,7 +303,10 @@ def check_trial(trial: Path, harness: str, fault_type: str, capability: str) -> 
     result: dict[str, Any] = {"trial": trial.name, "exposed": bool(calls), "tool": calls[0][0] if calls else None}
     result["logged"] = bool(applied)
     if calls and applied:
-        ok, attribution = delivered(fault_type, calls[0][1], texts.get(applied[0].get("payload_id"), ""))
+        tool, text = calls[0]
+        if h.inner is not None and fault_type not in TEXT_TYPES:
+            text = h.inner(tool, text)
+        ok, attribution = delivered(fault_type, text, texts.get(applied[0].get("payload_id"), ""))
     else:
         ok, attribution = False, False
     result["delivered"] = ok

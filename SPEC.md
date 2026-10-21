@@ -129,6 +129,7 @@ Differentiation claim (subject to V-19): CMCA injects one seeded fault model ins
 | `pi-claude` | Pi | `<ANTHROPIC_MODEL_ID>` | fixed | S, N |
 | `opencode-claude` | OpenCode v2 | `<ANTHROPIC_MODEL_ID>` | fixed | S, N |
 | `fx-claude` | fx | `<ANTHROPIC_MODEL_ID>` through Vercel AI Gateway | fixed | S only |
+| `fxh-claude` | fxh (fork of fx 0.0.13 with tool hooks, D-0040) | `<ANTHROPIC_MODEL_ID>` through Vercel AI Gateway | fixed | N only |
 
 Rules:
 
@@ -236,6 +237,7 @@ Initial mapping from documentation. The conformance suite MUST confirm every row
 | Pi | `read` | `write` | `edit` | confirm | confirm | `bash` | confirm |
 | OpenCode v2 | `read` | `write` | `edit` | `grep`, `glob` | `list` | `bash` | confirm |
 | fx | n/a (Track S only) | | | | | | from `~/.fx/mcp.json` |
+| fxh | `read_file` | `write_file` | `edit_file` | `grep_files`, `glob_files` | n/a | `shell` (`action: run`) | not mapped (Track N only) |
 
 **Exposure asymmetry.** Harnesses route the same intent through different tools. Codex, for example, often reads files through shell, so a read fault in Claude Code may correspond to a shell fault in Codex. Analysis MUST report per-class exposure for every trial and normalize event-level metrics by exposure. Board-level success metrics are not normalized; the asymmetry is part of what is being measured and MUST be stated on the board.
 
@@ -885,6 +887,7 @@ cost   = trials x mean_cost_per_trial x (1 + rerun_allowance)
 - Planning prior: HAL reported about $40,000 for 21,730 rollouts across its benchmarks, roughly $1.84 per rollout. CMCA trials are expected to be cheaper per trial but this MUST be measured, not assumed.
 - **Cost gate.** Before any run beyond conformance, execute 5 tasks per config under `clean` and `moderate`, compute the observed mean cost per trial per config, and present the projected total to the owner. No run proceeds without approval.
 - Pilot (M5): Track S 12 tasks and Track N 12 tasks, profiles `clean` and `moderate`, n = 3. Track S runs 4 configs (`cc-claude`, `fx-claude`, `pi-claude`, `opencode-claude`) and Track N 3 (`cc-claude`, `pi-claude`, `opencode-claude`): 504 trials. `codex-gpt` and `agy-gemini` join after M3 (D-0039).
+- `fxh-claude` joins Track N in M6, pre-registered with the other configs (D-0040); the M6 plan sets its trial count.
 - v1.0 (M6): leaderboard profiles 2,400 trials on Track S (40 x 6 x 2 x 5) and 2,000 on Track N (40 x 5 x 2 x 5); curve profiles 720 on Track S (20 x 6 x 2 x 3) and 600 on Track N (20 x 5 x 2 x 3). Total 5,720 trials before reruns.
 - Default rerun allowance: 10%.
 

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/SiteNav';
 import { type Cell, grid, loadCapabilities } from '@/lib/capabilities';
 import { REPO, SPEC } from '@/lib/links';
@@ -8,6 +9,16 @@ export const metadata: Metadata = { title: 'Capabilities | Chaos Monkey for Codi
 const CRASH: Record<string, string> = {
   fail_open: 'fail open: with an injector build that throws on load, the probe shell call returned its real output',
   fail_closed: 'fail closed: with an injector build that throws on load, the probe shell call did not return its real output',
+};
+
+// fxh is CMCA's fork of fx (D-0040) and was probed with a stub model, unlike the other harnesses.
+const NOTE: Record<string, ReactNode> = {
+  fxh: (
+    <>
+      fxh is a fork of fx 0.0.13 with tool hooks (<a href="https://github.com/davila7/fxh">davila7/fxh</a>, D-0040). Its
+      probes ran against a stub model, not a live one (<a href={`${REPO}/blob/main/docs/verification/V-27.md`}>V-27</a>).
+    </>
+  ),
 };
 
 const LABEL: Record<Cell['state'], string> = {
@@ -67,6 +78,7 @@ export default function CapabilitiesPage() {
               <h2>
                 {c.harness} {c.version}
               </h2>
+              {NOTE[c.harness] && <p className="page-text">{NOTE[c.harness]}</p>}
               <div className="grid-defs">
                 <div>
                   <b>Crash behavior</b>
