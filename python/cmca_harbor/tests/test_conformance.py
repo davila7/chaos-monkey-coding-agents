@@ -161,3 +161,13 @@ def test_archive_copies_only_the_evidence(tmp_path: Path):
         "conf-pi-deny-a0/read/agent/tt/events.jsonl",
         "conf-pi-deny-a0/read/config.json",
     ]
+
+
+def test_fx_inner_reads_inside_fx_framing():
+    from cmca_harbor.conformance import fx_inner
+
+    assert fx_inner("read_file", "<path>probe/notes.txt</path>\n<content>\n</content>") == ""
+    assert fx_inner("read_file", "<path>a</path>\n<content>\n9 \tnine\n10\tten\n</content>") == "nine\nten\n"
+    assert fx_inner("shell", json.dumps({"exit_code": 0, "output_delta": ""})) == ""
+    assert fx_inner("grep_files", "") == ""
+    assert fx_inner("shell", "not json") == "not json"

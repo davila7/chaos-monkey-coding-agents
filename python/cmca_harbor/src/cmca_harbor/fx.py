@@ -186,11 +186,15 @@ class ChaosFx(Fx):
         await self.exec_as_agent(environment, command=script)
         await self._configure(environment)
 
+    def _settings(self) -> dict[str, Any]:
+        return {"effort": self.options.reasoning_effort} if self.options.reasoning_effort is not None else {}
+
     async def _configure(self, environment) -> None:
         """The parent install after its download: settings, skills, MCP servers."""
-        if self.options.reasoning_effort is not None:
+        settings = self._settings()
+        if settings:
             await self._upload_config_text(
-                environment, content=json.dumps({"effort": self.options.reasoning_effort}), remote_path="/tmp/fx-settings.json", filename="settings.json"
+                environment, content=json.dumps(settings), remote_path="/tmp/fx-settings.json", filename="settings.json"
             )
             await self.exec_as_agent(environment, command='mkdir -p "$HOME/.fx" && mv /tmp/fx-settings.json "$HOME/.fx/settings.json"')
         skills = self._build_register_skills_command()
