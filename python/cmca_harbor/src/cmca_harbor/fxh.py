@@ -18,10 +18,12 @@ from cmca_harbor.fx import ChaosFx, ChaosFxOptions
 RELEASES = "https://github.com/davila7/fxh/releases/download"
 # sha256 of the binary inside `fxh-v<version>-linux-<arch>.tar.gz`. The fork
 # builds reproducibly (FORK.md), so a local ReleaseSafe build of the tagged
-# commit has the same hash as the release.
+# commit has the same hash as the release. The binary embeds the short commit
+# id, so the release (merge commit 920a081) differs from the V-27 build of
+# e6cc054, which has the same source tree (V-27, "Release binary").
 BINARIES = {
     "0.0.13-h1": {
-        "x86_64": "d0adb3867b7da10d1bc63605c3afbced7e3110bcad62c2e2ce72c4450ca83808",
+        "x86_64": "574acd4d65da41e6e88980aa4381651cac1d1a1268c276b75a2429a159de9189",
     },
 }
 # Built-in tools the injector maps to a capability class (packages/injector-fxh).

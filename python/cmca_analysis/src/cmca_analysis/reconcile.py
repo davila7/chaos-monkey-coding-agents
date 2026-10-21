@@ -24,6 +24,25 @@ def shows_line(observation: str, line: str) -> bool:
     return False
 
 
+_FX_READ = re.compile(r"^<path>.*?</path>\n<content>\n(.*)</content>$", re.S)
+def fx_inner(observation: str) -> str:
+    """The tool output inside fx's framing: file lines without numbers, or shell output; the input otherwise.
+
+    fx 0.0.13 frames `read_file` output as `<path>..</path>` and numbered lines and
+    `shell` output as a status JSON with the text in `output_delta` (V-27).
+    """
+    m = _FX_READ.match(observation)
+    if m:
+        return "".join(re.sub(r"^\d+ *\t", "", line) for line in m.group(1).splitlines(keepends=True))
+    try:
+        data = json.loads(observation)
+    except ValueError:
+        return observation
+    if isinstance(data, dict) and isinstance(data.get("output_delta"), str):
+        return data["output_delta"]
+    return observation
+
+
 def mcp_text(observation: str) -> str:
     """The text content of an MCP result that fx passed on as raw JSON; the input otherwise."""
     try:
@@ -43,6 +62,7 @@ def delivered(
     if fault_type in TEXT_TYPES:
         # fx passes the raw MCP result on, so the payload can arrive JSON-escaped.
         return bool(payload) and (payload in observation or json.dumps(payload)[1:-1] in observation)
+    observation = fx_inner(observation)
     if fault_type == "empty":
         s = mcp_text(observation).strip()
         return s == "" or (len(s) < 300 and bool(_EMPTY_RENDERING.search(s)))
