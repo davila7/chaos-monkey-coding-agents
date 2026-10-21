@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, TaskDecl, read_status, task_decls
+from .ingest import CATALOG_PATH, ELIGIBLE, TaskDecl, fx_not_run, read_status, task_decls
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -47,7 +47,8 @@ def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[s
 def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], tuple[Any, ...] | None]]:
     by_tool: dict[str, list[tuple[Any, ...]]] = {}
     for c in calls:
-        by_tool.setdefault(_MCP_PREFIX.sub("", c[0]), []).append(c)
+        if not fx_not_run(c[1]):
+            by_tool.setdefault(_MCP_PREFIX.sub("", c[0]), []).append(c)
     seen: Counter[str] = Counter()
     out = []
     for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):

@@ -54,6 +54,14 @@ def content_text(content: Any) -> str:
     return "\n".join(p.get("text") or "" for p in content if isinstance(p, dict))
 
 
+_FX_NOT_RUN = re.compile(r'"type":"tool_execution_failed".*so fx did not run the call', re.S)
+
+
+def fx_not_run(observation: str) -> bool:
+    """fx refused the call because its arguments were not complete JSON, before any injector saw it."""
+    return bool(_FX_NOT_RUN.search(observation))
+
+
 def bare_name(tool: str) -> str:
     return MCP_PREFIX.sub("", tool)
 
@@ -243,10 +251,12 @@ def join(events: list[dict[str, Any]], calls: list[Call]) -> list[tuple[dict[str
 
     The n-th record for a tool name belongs to the n-th trajectory call of that
     tool: the injector logs every call of a mapped tool, exempt ones included.
+    Calls fx refused for incomplete arguments never reached the injector.
     """
     by_tool: dict[str, list[Call]] = {}
     for c in calls:
-        by_tool.setdefault(c.name, []).append(c)
+        if not fx_not_run(c.observation):
+            by_tool.setdefault(c.name, []).append(c)
     seen: Counter[str] = Counter()
     out = []
     for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
