@@ -14,7 +14,7 @@ export function SiteNav() {
     <nav className="nav">
       <div className="wrap">
         <a className="brand" href="/">
-          <img src="/mark.png" alt="" />
+          <img src="/monkey.svg" alt="" width={28} height={29} />
           CHAOS MONKEY
         </a>
         <div className="nav-links">
