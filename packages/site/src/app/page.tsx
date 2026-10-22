@@ -1,6 +1,8 @@
+import { HomeChart } from '@/components/HomeChart';
 import { Leaderboard } from '@/components/Leaderboard';
 import { SiteNav } from '@/components/SiteNav';
 import { loadSiteData } from '@/lib/data';
+import { headlineRanking } from '@/lib/headline';
 import { REPO, SPEC } from '@/lib/links';
 
 const METRICS: [string, string][] = [
@@ -22,7 +24,7 @@ export default function Home() {
 
       <main className="wrap">
         <header className="hero">
-          <div className="banner" role="img" aria-label="Chaos Monkey: Coding Agent Benchmark">
+          <div className="banner" role="img" aria-label="Chaos Monkey: Agent Benchmark">
             <img className="mark" src="/monkey.svg" alt="" width={700} height={724} />
             <img className="title" src="/banner-text.png" alt="" width={1472} height={724} />
           </div>
@@ -40,7 +42,12 @@ export default function Home() {
           </div>
         </header>
 
+        <section id="ranking" className="block">
+          <HomeChart rows={headlineRanking(data)} />
+        </section>
+
         <section id="results" className="block">
+          <h2>Detailed results</h2>
           <Leaderboard data={data} />
         </section>
 
@@ -67,6 +74,8 @@ export default function Home() {
           ) : null}
           . Intervals are 95% hierarchical bootstrap intervals over tasks and attempts.{' '}
           <a href="/data.json">Download the data</a>. Code Apache-2.0, task data CC BY 4.0.
+          <br />
+          Created by <a href="https://x.com/dani_avila7">@dani_avila7</a>.
         </div>
       </footer>
     </>

@@ -588,7 +588,7 @@ Requirements:
 - One Hub leaderboard per board (Track S; Track N fixed model; Track N native pairs; sub-boards). Rows carry metadata (config, versions) and metrics computed by analysis, and link to their trial IDs. Hub does not compute scores, so the analysis output is the source of truth.
 - Static site (Next.js static export on Vercel) built from the Hub public leaderboard API plus analysis JSON. Pages: Overview, Leaderboards (one tab per board), Config detail (metrics, per-fault breakdown, trial links), Methodology, Tasks (public split browser), Capabilities, Submit, Changelog.
 - Charts: degradation curve per config, Faulted Success vs cost per success (Pareto), fault-event outcome distribution, harness x fault-type heatmap of event recovery rate.
-- Rank bands instead of ordinal ranks when confidence intervals overlap (section 12).
+- Rank bands instead of ordinal ranks when confidence intervals overlap in the detailed tables (section 12; home ranking per D-0041).
 
 ## 10. Task suite
 
@@ -701,7 +701,7 @@ Flag any shell command or tool call within 10 steps after a fault event that mat
 - **Pre-registration.** Freeze `METHODOLOGY.md`, profile files, and the analysis package version with a git tag before the full run (M6). Changes after the tag are recorded as deviations in the release notes.
 - **Confidence intervals.** Hierarchical bootstrap: resample tasks with replacement, then resample attempts within each task; 10,000 replicates; 95% percentile intervals. Report intervals for every metric on the board.
 - **Paired comparisons.** Configs on the same board share tasks, profiles, seeds, and attempt indices. Compare per-task differences with a paired permutation test and apply Holm correction across all pairs within a board.
-- **Rank bands.** Configs whose 95% intervals for Faulted Success overlap share a band. The site shows bands, not ordinal ranks.
+- **Rank bands.** Configs whose 95% intervals for Faulted Success overlap share a band. The detailed tables show bands. The home ranking shows ordinal ranks by tasks finished under `moderate` on Track S, equal shares sharing a rank (D-0041).
 - **Power.** After the pilot, estimate between-task and within-task variance and choose `n` and task counts so that the minimum detectable difference in Faulted Success is at most 10 percentage points at 80% power. If the budget cannot reach that, publish the actual minimum detectable difference on the board.
 - **Exclusions.** Trials that fail for infrastructure reasons (model API 429 or 5xx outside injected faults, container crash, harness crash at startup) are rerun up to 2 times. Trials with missing delivery for a parity-set fault are rerun. Remaining exclusions are counted and shown per row.
 - No pooling across profiles in the headline. Each profile is reported on its own.

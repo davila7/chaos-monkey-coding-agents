@@ -142,6 +142,8 @@ def _profile_summary(
         "trials": len(trials),
         "tasks": len([g for g in valid_groups if g]),
         "pass1": m.pass1(valid_groups),
+        "successes": sum(1 for t in valid if t.success),
+        "valid_trials": len(valid),
         "pass3": m.pass_k(valid_groups, 3),
         "outcomes": m.outcome_distribution(an),
         "event_recovery_rate": m.event_recovery_rate(an),
@@ -227,6 +229,7 @@ def site_row(summary: dict[str, Any], config: Config, rates: dict[str, float]) -
             "dollars_per_success": mod["dollars_per_success"],
             "tokens_total": mod["tokens_total"],
         },
+        "faulted_counts": {"succeeded": mod["successes"], "sent": mod["valid_trials"]},
         "curve": curve if len(curve) > 2 else None,
         "trial_links": summary["trial_links"],
     }
