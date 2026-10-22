@@ -62,6 +62,12 @@ def fx_not_run(observation: str) -> bool:
     return bool(_FX_NOT_RUN.search(observation))
 
 
+def unlogged(tool: str, args: dict[str, Any], observation: str) -> bool:
+    """A trajectory call the injector never logs: one fx refused before running it, or an fx
+    `shell` call that acts on a command already started (`interact`, `stop`; injector-fxh capabilityOf)."""
+    return fx_not_run(observation) or (tool == "shell" and args.get("action") not in (None, "run"))
+
+
 def bare_name(tool: str) -> str:
     return MCP_PREFIX.sub("", tool)
 
@@ -251,11 +257,11 @@ def join(events: list[dict[str, Any]], calls: list[Call]) -> list[tuple[dict[str
 
     The n-th record for a tool name belongs to the n-th trajectory call of that
     tool: the injector logs every call of a mapped tool, exempt ones included.
-    Calls fx refused for incomplete arguments never reached the injector.
+    Calls the injector never sees or does not log (`unlogged`) are skipped.
     """
     by_tool: dict[str, list[Call]] = {}
     for c in calls:
-        if not fx_not_run(c.observation):
+        if not unlogged(c.name, c.args, c.observation):
             by_tool.setdefault(c.name, []).append(c)
     seen: Counter[str] = Counter()
     out = []

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resolveEngineConfig, type EngineConfigInput } from '@cmca/fault-engine';
@@ -11,10 +11,11 @@ const BIN = join(ENGINE, 'dist/bin/tt-decide.cjs');
 const PKG = resolve(import.meta.dirname, '..');
 
 beforeAll(() => {
-  for (const [cwd, script] of [
-    [ENGINE, 'scripts/bundle.mjs'],
-    [PKG, 'scripts/build.mjs'],
-  ] as const) {
+  // build.mjs deletes dist first, and the cli lint test reads dist while the
+  // workspace tests run in parallel, so only build when `pnpm build` has not.
+  const steps: [string, string][] = [[ENGINE, 'scripts/bundle.mjs']];
+  if (!existsSync(join(PKG, 'dist/tt/fxh/index.cjs'))) steps.push([PKG, 'scripts/build.mjs']);
+  for (const [cwd, script] of steps) {
     const r = spawnSync(process.execPath, [script], { cwd, encoding: 'utf8' });
     if (r.status !== 0) throw new Error(r.stderr);
   }

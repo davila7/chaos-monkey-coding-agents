@@ -62,6 +62,13 @@ def test_join_skips_calls_fx_did_not_run():
     assert [c.index for _, c in join(events, calls)] == [0, 2]
 
 
+def test_join_skips_fx_shell_calls_on_a_started_command():
+    actions = ["run", "interact", None, "stop", "run"]
+    calls = [Call(i, i, i, "shell", {} if a is None else {"action": a}, "x") for i, a in enumerate(actions)]
+    events = [{"seq": i, "tool_name": "shell", "decision": "pass"} for i in range(3)]
+    assert [c.index for _, c in join(events, calls)] == [0, 2, 4]
+
+
 def _fx_shell(output: str) -> str:
     return json.dumps({"state": "completed", "exit_code": 0, "output_delta": output}, separators=(",", ":"))
 
