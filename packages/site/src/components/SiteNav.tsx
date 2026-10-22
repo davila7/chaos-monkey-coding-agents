@@ -2,7 +2,6 @@ import { REPO, SPEC } from '@/lib/links';
 import { NavMenu } from './NavMenu';
 
 const LINKS: [string, string][] = [
-  ['/#results', 'Results'],
   ['/#metrics', 'Metrics'],
   ['/capabilities/', 'Capabilities'],
   ['/smoke/', 'Smoke runs'],
