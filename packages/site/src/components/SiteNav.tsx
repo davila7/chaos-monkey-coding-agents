@@ -2,7 +2,6 @@ import { REPO, SPEC } from '@/lib/links';
 import { NavMenu } from './NavMenu';
 
 const LINKS: [string, string][] = [
-  ['/#results', 'Results'],
   ['/#metrics', 'Metrics'],
   ['/capabilities/', 'Capabilities'],
   ['/smoke/', 'Smoke runs'],
@@ -15,7 +14,7 @@ export function SiteNav() {
     <nav className="nav">
       <div className="wrap">
         <a className="brand" href="/">
-          <img src="/mark.png" alt="" />
+          <img src="/monkey.svg" alt="" width={28} height={29} />
           CHAOS MONKEY
         </a>
         <div className="nav-links">
