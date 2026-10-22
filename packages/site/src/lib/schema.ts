@@ -27,6 +27,8 @@ export const Row = z.object({
     dollars_per_success: z.number().nonnegative().nullable(),
     tokens_total: z.number().int().nonnegative().nullable(),
   }),
+  /** Raw counts behind the headline: moderate trials that succeeded, out of valid moderate trials. */
+  faulted_counts: z.object({ succeeded: z.number().int().nonnegative(), sent: z.number().int().positive() }).nullable().default(null),
   /** pass^1 per fault profile base rate, for the degradation curve. */
   curve: z.array(z.object({ profile: z.string(), base_rate: unit, pass1: Interval })).nullable(),
   /** Committed job directories this row was computed from. */
