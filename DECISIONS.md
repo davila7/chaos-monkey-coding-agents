@@ -1256,3 +1256,7 @@ Alternatives considered:
 - Recompute M5 with the misses counted as delivered: the model never saw them; the exclusion and rerun already handled them.
 
 Consequences: Track N fidelity should reach the bar on all three harnesses once item 3 confirms delivery with the model. `cc-claude` failed commands under a post-phase fault lose the error flag, recorded as a parity note. M6 waits on the budget decision.
+
+Progress:
+
+- 2026-10-24, item 3 preparation (no model calls): the conformance task `probe-shell-fail` (`datasets/conformance/probe-shell-fail`, generated from `EXTRA_PROBES` in `cmca_harbor.probes`) runs the `probe-shell` command followed by `exit 3`, for `empty`, `trunc` and `poison`. `conformance plan` adds it to those type jobs, and `--task probe-shell-fail` plans only its runs (9 per harness, no crash job). `conformance report` counts its runs in the `shell` cell, so that cell passes only when both shell probes pass. The `empty` delivery check in `cmca_harbor.conformance` and in `cmca_analysis.reconcile` now ignores the status line of a failed command (`Exit code <n>`, `Command exited with code <n>`), which Claude Code shows alone when a failed command has no output. Regenerating the M5 release from the committed evidence gives the same files.

@@ -11,6 +11,8 @@ from .ingest import Trial, bare_name, content_text
 
 TEXT_TYPES = {"deny", "err", "falsefail"}
 _EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", re.I)
+# The status line Claude Code and Pi show for a failed shell command (V-01, V-10).
+_EXIT_STATUS = re.compile(r"^(Exit code|Command exited with code) -?\d+$", re.M)
 # fault-engine LINE_PREFIX: what `cat -n`, `grep -n` and `grep` over several files put before a line.
 _LINE_PREFIX = re.compile(r"(\s*\d+\t|\d+[:-]|[^\t\n]*?:(\d+[:-])?)")
 
@@ -64,7 +66,7 @@ def delivered(
         return bool(payload) and (payload in observation or json.dumps(payload)[1:-1] in observation)
     observation = fx_inner(observation)
     if fault_type == "empty":
-        s = mcp_text(observation).strip()
+        s = _EXIT_STATUS.sub("", mcp_text(observation)).strip()
         return s == "" or (len(s) < 300 and bool(_EMPTY_RENDERING.search(s)))
     if fault_type == "poison":
         if token and token in observation:

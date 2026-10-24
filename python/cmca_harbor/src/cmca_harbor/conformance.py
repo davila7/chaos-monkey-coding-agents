@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from cmca_harbor.common import REPO_ROOT
-from cmca_harbor.probes import HEAD, POISON_TOKEN, PROBES, TAIL, write_tasks
+from cmca_harbor.probes import ALL_PROBES, EXTRA_PROBES, HEAD, POISON_TOKEN, PROBES, TAIL, Probe, write_tasks
 
 DATASET = REPO_ROOT / "datasets/conformance"
 CATALOG = REPO_ROOT / "packages/fault-engine/catalog/v1.json"
@@ -186,8 +186,8 @@ def shell_source(task_dir: Path, decl: dict[str, Any], variant: str) -> str:
     return original
 
 
-def engine_config(harness: str, version: str, fault_type: str, capability: str) -> dict[str, Any]:
-    probe = PROBES[capability]
+def engine_config(harness: str, version: str, fault_type: str, capability: str, probe: Probe | None = None) -> dict[str, Any]:
+    probe = probe or PROBES[capability]
     task, variants, sources = task_chaos(DATASET / probe.task)
     return {
         "schema": "tt-engine/1",
@@ -218,8 +218,13 @@ def broken_build(build: Path, harness: Harness, out: Path) -> None:
     (out / harness.harness_dir / entry).write_text('throw new Error("unavailable");\n')
 
 
-def plan(harness: str, version: str, model: str, build: Path, out: Path, jobs: Path, dataset: Path = DATASET) -> list[list[str]]:
-    """Writes engine configs and the broken build under `out`; returns Harbor commands."""
+def plan(
+    harness: str, version: str, model: str, build: Path, out: Path, jobs: Path, dataset: Path = DATASET, only: set[str] | None = None
+) -> list[list[str]]:
+    """Writes engine configs and the broken build under `out`; returns Harbor commands.
+
+    `only` keeps the runs of those tasks and drops the crash job, for a rerun of some probes.
+    """
     h = HARNESSES[harness]
     commands = []
     by_type: dict[str, list[str]] = {}
@@ -230,6 +235,9 @@ def plan(harness: str, version: str, model: str, build: Path, out: Path, jobs: P
         cfg_dir.mkdir(parents=True, exist_ok=True)
         (cfg_dir / f"{PROBES[c].task}.json").write_text(json.dumps(engine_config(harness, version, t, c), indent=2))
         by_type.setdefault(t, []).append(PROBES[c].task)
+        for probe in (p for p in EXTRA_PROBES if p.capability == c and t in (p.types or (t,))):
+            (cfg_dir / f"{probe.task}.json").write_text(json.dumps(engine_config(harness, version, t, c, probe), indent=2))
+            by_type[t].append(probe.task)
 
     def cmd(job: str, tasks: list[str], cfg: Path, bld: Path, attempt: int) -> list[str]:
         argv = ["harbor", "run", "-p", str(dataset), "-a", h.agent, "-m", model, "-k", "1", "-o", str(jobs), "--job-name", job, "-y"]
@@ -240,8 +248,11 @@ def plan(harness: str, version: str, model: str, build: Path, out: Path, jobs: P
         return argv
 
     for t, tasks in by_type.items():
-        for a in range(RUNS):
+        tasks = [x for x in tasks if only is None or x in only]
+        for a in range(RUNS if tasks else 0):
             commands.append(cmd(f"conf-{harness}-{t}-a{a}", tasks, out / "configs" / t, build, a))
+    if only is not None:
+        return commands
     broken_build(build, h, out / "broken")
     commands.append(cmd(f"conf-{harness}-crash-a0", [PROBES["shell"].task], out / "configs/deny", out / "broken", 0))
     return commands
@@ -268,6 +279,8 @@ def class_calls(trajectory: dict[str, Any], tools: dict[str, str], capability: s
 
 
 _EMPTY_RENDERING = re.compile(r"\bempty\b|no (output|content)|without output", re.I)
+# The status line Claude Code and Pi show for a failed shell command (V-01, V-10).
+_EXIT_STATUS = re.compile(r"^(Exit code|Command exited with code) -?\d+$", re.M)
 
 
 def delivered(fault_type: str, text: str, payload: str) -> tuple[bool, bool]:
@@ -278,6 +291,8 @@ def delivered(fault_type: str, text: str, payload: str) -> tuple[bool, bool]:
         return ok, ok and stripped != payload
     if fault_type == "empty":
         markers = HEAD in text or TAIL in text
+        # A failed command with no output still shows its status line.
+        stripped = _EXIT_STATUS.sub("", stripped).strip()
         ok = not markers and (stripped == "" or (len(stripped) < 300 and bool(_EMPTY_RENDERING.search(stripped))))
         return ok, ok and stripped != ""
     if fault_type == "trunc":
@@ -291,7 +306,7 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text()) if path.exists() else None
 
 
-def check_trial(trial: Path, harness: str, fault_type: str, capability: str) -> dict[str, Any]:
+def check_trial(trial: Path, harness: str, fault_type: str, capability: str, probe: Probe | None = None) -> dict[str, Any]:
     """SPEC 9.6 checks 1, 2, 3, 4 and 5 for one trial directory."""
     h = HARNESSES[harness]
     events = [json.loads(line) for line in (trial / "agent/tt/events.jsonl").read_text().splitlines() if line.strip()] if (
@@ -311,7 +326,7 @@ def check_trial(trial: Path, harness: str, fault_type: str, capability: str) -> 
         ok, attribution = False, False
     result["delivered"] = ok
     result["attribution_visible"] = attribution if ok else None
-    probe = PROBES[capability]
+    probe = probe or PROBES[capability]
     if probe.effect_path is None:
         result["side_effect"] = None
     else:
@@ -346,15 +361,16 @@ def _p95(values: list[float]) -> float | None:
 def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], str]) -> dict[str, Any]:
     """The capability file for one harness version from its conformance jobs."""
     h = HARNESSES[harness]
-    task_class = {p.task: c for c, p in PROBES.items()}
+    probes = {p.task: p for p in ALL_PROBES}
     per_cell: dict[tuple[str, str], list[dict[str, Any]]] = {}
     latencies: list[float] = []
     seen_tools: dict[str, str] = {}
     for t in TYPES:
         for a in range(RUNS):
             for trial in _trials(jobs, f"conf-{harness}-{t}-a{a}"):
-                c = task_class[_task_of(trial)]
-                r = check_trial(trial, harness, t, c)
+                probe = probes[_task_of(trial)]
+                c = probe.capability
+                r = check_trial(trial, harness, t, c, probe)
                 per_cell.setdefault((t, c), []).append(r)
                 # A call the injector never saw (a tool the harness lacks) is not mapped.
                 if r["tool"] and r["logged"]:
@@ -451,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--jobs", type=Path, default=Path("jobs"))
     p.add_argument("--dataset", type=Path, default=DATASET, help="a copy of datasets/conformance, for example with a local CA added")
+    p.add_argument("--task", action="append", help="only these probe tasks, no crash job (repeatable)")
     r.add_argument("--jobs", required=True, type=Path)
     r.add_argument("--gap", action="append", default=[], help="type:class=reason, a cell conformance showed undeliverable (D-0017)")
     r.add_argument("--out", type=Path, default=REPO_ROOT / "capabilities")
@@ -462,7 +479,8 @@ def main(argv: list[str] | None = None) -> int:
             print(d.relative_to(REPO_ROOT))
         return 0
     if args.cmd == "plan":
-        for argv_ in plan(args.harness, args.version, args.model, args.build.resolve(), args.out.resolve(), args.jobs, args.dataset.resolve()):
+        only = set(args.task) if args.task else None
+        for argv_ in plan(args.harness, args.version, args.model, args.build.resolve(), args.out.resolve(), args.jobs, args.dataset.resolve(), only):
             print(shlex.join(argv_))
         return 0
     gaps = {}
