@@ -93,7 +93,41 @@ describe('handlers with the real engine', () => {
     const h = setup({ trunc: 1 });
     expect(await h.result({ ...bash('none'), content: text('x'), isError: false })).toBeUndefined();
     await h.call(bash('4'));
-    expect(await h.result({ ...bash('4'), content: text('boom'), isError: true })).toBeUndefined();
+    expect(await h.result({ ...bash('4'), content: text('Command timed out after 5 seconds'), isError: true })).toBeUndefined();
+    const read: ToolCallEvent = { toolName: 'read', toolCallId: '4r', input: { path: 'missing' } };
+    await h.call(read);
+    expect(await h.result({ ...read, content: text('ENOENT\n\nCommand exited with code 1'), isError: true })).toBeUndefined();
+  });
+
+  it('transforms the output of a bash command that exited non-zero and keeps it failed', async () => {
+    const h = setup({ trunc: 1 });
+    await h.call(bash('7'));
+    const patch = await h.result({
+      ...bash('7'),
+      content: text('0123456789\n\nCommand exited with code 2'),
+      structuredContent: { output: '0123456789', truncated: false, exit_code: 2 },
+      isError: true,
+    });
+    expect(patch).toEqual({
+      content: text('012\n\nCommand exited with code 2'),
+      structuredContent: { output: '012', truncated: false, exit_code: 2 },
+      isError: true,
+    });
+  });
+
+  it('shows `(no output)` when a failed command output is emptied', async () => {
+    const h = setup({ empty: 1 });
+    await h.call(bash('8'));
+    const patch = (await h.result({ ...bash('8'), content: text('x\n\nCommand exited with code 1'), isError: true })) as {
+      content: { text: string }[];
+    };
+    expect(patch.content[0]!.text).toBe('(no output)\n\nCommand exited with code 1');
+  });
+
+  it('leaves a failed command alone under falsefail', async () => {
+    const h = setup({ falsefail: 1 });
+    await h.call(bash('9'));
+    expect(await h.result({ ...bash('9'), content: text('x\n\nCommand exited with code 1'), isError: true })).toBeUndefined();
   });
 
   it('never faults exempt paths', async () => {

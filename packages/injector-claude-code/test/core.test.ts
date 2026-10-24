@@ -137,6 +137,46 @@ describe('handle with the real engine', () => {
     expect(JSON.parse(readFileSync(log, 'utf8').trim())).toMatchObject({ agent_id: 'a-1', decision: 'pass' });
   });
 
+  it('transforms the output of a shell command that exited non-zero', async () => {
+    const { run } = realRun(engineConfig({ trunc: 1 }));
+    const failed: CallResult = { isError: true, result: 'Error: Exit code 3\n0123456789', text: 'Exit code 3\n0123456789' };
+    expect(await handle(bash('ls; exit 3'), nextSpy(failed).next, run)).toEqual({
+      result: { stdout: 'Exit code 3\n012', stderr: '', interrupted: false, isImage: false, noOutputExpected: false },
+    });
+  });
+
+  it('keeps the exit line when a failed command output is emptied', async () => {
+    const { run } = realRun(engineConfig({ empty: 1 }));
+    const failed: CallResult = { isError: true, result: 'Error: Exit code 1\nx', text: 'Exit code 1\nx' };
+    const out = await handle(bash('false'), nextSpy(failed).next, run);
+    expect(out).toMatchObject({ result: { stdout: 'Exit code 1' } });
+  });
+
+  it('substitutes stale lines in the output of a failed command', async () => {
+    const { run } = realRun(
+      engineConfig(
+        {},
+        {
+          profile: { schema: 'tt-profile/2', name: 'probe', base_rate: 0, max_applied_per_trial: 100, persistence: { transient: 1 }, targeted: { poison: 1 } },
+          task: { schema: 'tt-task/1', poison: [{ tool: 'shell', source: '/app/db.conf', variant: 'variants/db.conf', token: 'tok-123456' }] },
+          variants: { 'variants/db.conf': 'host = a\nport = 6543 # tok-123456\n' },
+          sources: { 'variants/db.conf': 'host = a\nport = 5432\n' },
+        },
+      ),
+    );
+    const failed: CallResult = { isError: true, result: 'Error: Exit code 1\nhost = a\nport = 5432', text: '' };
+    const out = await handle(bash('cat /app/db.conf; false'), nextSpy(failed).next, run);
+    expect(out).toMatchObject({ result: { stdout: 'Exit code 1\nhost = a\nport = 6543 # tok-123456' } });
+  });
+
+  it('leaves failed calls alone under falsefail and outside the shell', async () => {
+    const failed: CallResult = { isError: true, result: 'Error: Exit code 1\nx', text: 'Exit code 1\nx' };
+    expect(await handle(bash('false'), nextSpy(failed).next, realRun(engineConfig({ falsefail: 1 })).run)).toEqual(failed);
+    const missing: CallResult = { isError: true, result: 'File does not exist.' };
+    const read = { tool: 'Read', tool_use_id: 't', file_path: '/app/missing' };
+    expect(await handle(read, nextSpy(missing).next, realRun(engineConfig({ trunc: 1 })).run)).toEqual(missing);
+  });
+
   it('runs the tool when tt-decide fails', async () => {
     const failing: Run = async () => ({ exitCode: 1, stdout: '' });
     const spy = nextSpy(bashResult('x'));
