@@ -117,6 +117,9 @@ def test_delivery_predicates():
     assert delivered("deny", "file text", "EACCES: permission denied", None) is False
     assert delivered("empty", "", "", None) is True
     assert delivered("empty", "1\tline", "", None) is False
+    assert delivered("empty", "Exit code 3", "", None) is True
+    assert delivered("empty", "(no output)\n\nCommand exited with code 3", "", None) is True
+    assert delivered("empty", "Exit code 3\n1\tline", "", None) is False
     assert delivered("poison", f"x {TOKEN}", "", TOKEN) is True
     assert delivered("trunc", "anything", "", None) is None
 

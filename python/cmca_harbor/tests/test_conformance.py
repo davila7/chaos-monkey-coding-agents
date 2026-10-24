@@ -7,11 +7,11 @@ import pytest
 
 from cmca_harbor import conformance as conf
 from cmca_harbor.common import RESOLVED_SCHEMA_PATH, REPO_ROOT
-from cmca_harbor.probes import HEAD, POISON_TOKEN, PROBES, TAIL, task_files
+from cmca_harbor.probes import ALL_PROBES, HEAD, POISON_TOKEN, TAIL, task_files
 
 
 def test_committed_probe_tasks_match_the_generator():
-    for probe in PROBES.values():
+    for probe in ALL_PROBES:
         task_dir = REPO_ROOT / "datasets/conformance" / probe.task
         for rel, content in task_files(REPO_ROOT, probe).items():
             assert (task_dir / rel).read_text() == content, f"{probe.task}/{rel}: run `python -m cmca_harbor.conformance tasks`"
@@ -50,6 +50,22 @@ def test_plan_skips_classes_without_a_tool_and_adds_the_crash_job(tmp_path: Path
     assert len(cmds) == len(conf.TYPES) * conf.RUNS + 1
     assert "throw" in (tmp_path / "out/broken/cc/hooks/register.js").read_text()
     assert (build / "cc/hooks/register.js").read_text().startswith("export")
+    assert sorted(c.split("--job-name ")[1].split(" ")[0][:-3] for c in joined if "probe-shell-fail" in c) == sorted(
+        f"conf-claude-code-{t}" for t in ("empty", "trunc", "poison") for _ in range(conf.RUNS)
+    )
+    cfg = json.loads((tmp_path / "out/configs/poison/probe-shell-fail.json").read_text())
+    assert cfg["task_id"] == "probe-shell-fail" and cfg["task"]["poison"][0]["source"] == "/app/probe/notes.txt"
+
+
+def test_plan_can_keep_only_some_probes(tmp_path: Path):
+    build = tmp_path / "build"
+    (build / "bin").mkdir(parents=True)
+    (build / "pi").mkdir()
+    (build / "pi/index.js").write_text("")
+    cmds = conf.plan("pi", "1.0.3", "m", build, tmp_path / "out", tmp_path / "jobs", only={"probe-shell-fail"})
+    assert len(cmds) == 3 * conf.RUNS
+    assert all(c.count("-i") == 1 and c[c.index("-i") + 1] == "probe-shell-fail" for c in cmds)
+    assert not (tmp_path / "out/broken").exists()
 
 
 @pytest.mark.parametrize(
@@ -62,6 +78,9 @@ def test_plan_skips_classes_without_a_tool_and_adds_the_crash_job(tmp_path: Path
         ("empty", "<system-reminder>the file exists but is empty</system-reminder>", "", (True, True)),
         ("empty", "File created successfully at: /app/probe/answer.txt", "", (False, False)),
         ("empty", f"1: {HEAD}", "", (False, False)),
+        ("empty", "Exit code 3", "", (True, False)),
+        ("empty", "(no output)\n\nCommand exited with code 3", "", (True, True)),
+        ("empty", f"Exit code 3\nFirst line: {HEAD}", "", (False, False)),
         ("trunc", f"First line: {HEAD}\nEntry", "", (True, False)),
         ("trunc", f"First line: {HEAD} ... {TAIL}", "", (False, False)),
         ("poison", f"see ticket {POISON_TOKEN}", "", (True, False)),
@@ -133,6 +152,11 @@ def test_report_builds_the_parity_set_with_gaps(tmp_path: Path):
                {"exists": True, "content_b64": base64.b64encode(b"ready").decode()})
         d = jobs / f"conf-pi-deny-a{a}"
         _trial(d, "read", "probe-fs-read", "read", "EACCES: permission denied", [_event("deny", "fs.read", "deny.eacces")], None)
+        d = jobs / f"conf-pi-trunc-a{a}"
+        _trial(d, "shell", "probe-shell", "bash", f"First line: {HEAD}", [_event("trunc", "shell", "trunc.head30")], {"exists": True})
+        failed = f"First line: {HEAD}" if a < 2 else f"First line: {HEAD} {TAIL}"
+        _trial(d, "shell-fail", "probe-shell-fail", "bash", failed + "\n\nCommand exited with code 3",
+               [_event("trunc", "shell", "trunc.head30")], {"exists": True})
     crash = jobs / "conf-pi-crash-a0"
     _trial(crash, "shell", "probe-shell", "bash", f"First line: {HEAD}", [], {"exists": True})
 
@@ -145,7 +169,9 @@ def test_report_builds_the_parity_set_with_gaps(tmp_path: Path):
     assert caps["parity_set"] == ["deny", "empty"]
     assert caps["parity_gaps"] == [{"type": "empty", "capability": "fs.write", "reason": "mapper renders a fixed line"}]
     assert caps["faults"]["empty"]["runs_passed"] == 3
-    assert caps["tool_map"] == {"read": "fs.read", "write": "fs.write"}
+    assert caps["tool_map"] == {"bash": "shell", "read": "fs.read", "write": "fs.write"}
+    assert caps["faults"]["trunc"]["classes"]["shell"] == caps["faults"]["trunc"]["classes"]["shell"] | {"runs": 6, "runs_passed": 5}
+    assert caps["faults"]["trunc"]["supported"] is False
     assert caps["crash_behavior"] == "fail_open"
     assert caps["injector_p95_ms"] == 2.0
 
