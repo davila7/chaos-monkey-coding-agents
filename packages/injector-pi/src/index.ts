@@ -84,6 +84,10 @@ function textOf(content: Content[]): string {
     .join('\n');
 }
 
+// Pi 1.0.3 returns a bash command that exits non-zero as an error result whose
+// text is the output, a blank line and this status (`dist/core/tools/bash.js`).
+const EXIT_STATUS = /\n\n(Command exited with code -?\d+)$/;
+
 /**
  * Registers the handlers. A `tool_call` handler that throws blocks the tool
  * in Pi (fail-closed, V-10), so every path here catches and passes through.
@@ -116,16 +120,27 @@ export function install(pi: Api, run: Run = nodeRun): void {
     if (!d) return undefined;
     pending.delete(e.toolCallId);
     try {
-      if (e.isError) return undefined;
+      // A call that failed by itself keeps its failure; only the output of a
+      // bash command that ran and exited non-zero is still transformed.
+      let text = textOf(e.content);
+      let status: string | undefined;
+      if (e.isError) {
+        const m = e.toolName === 'bash' && d.type !== 'falsefail' ? EXIT_STATUS.exec(text) : null;
+        if (!m) return undefined;
+        status = m[1];
+        text = text.slice(0, m.index);
+      }
       if (d.type === 'falsefail') {
         return { content: [{ type: 'text', text: d.text ?? '' }], isError: true };
       }
       if (!d.post) return undefined;
-      const output = (JSON.parse(await run(['--apply'], JSON.stringify({ post: d.post, output: textOf(e.content) }))) as {
+      const output = (JSON.parse(await run(['--apply'], JSON.stringify({ post: d.post, output: text }))) as {
         output: string;
       }).output;
+      // Pi prints `(no output)` for a failed command with no output.
+      const shown = status === undefined ? output : `${output === '' ? '(no output)' : output}\n\n${status}`;
       const others = e.content.filter((c) => c.type !== 'text');
-      const patch: ToolResultPatch = { content: [{ type: 'text', text: output }, ...others] };
+      const patch: ToolResultPatch = { content: [{ type: 'text', text: shown }, ...others], ...(e.isError ? { isError: true } : {}) };
       const sc = e.structuredContent;
       if (sc && typeof sc === 'object' && typeof (sc as Record<string, unknown>).output === 'string') {
         patch.structuredContent = { ...(sc as Record<string, unknown>), output };

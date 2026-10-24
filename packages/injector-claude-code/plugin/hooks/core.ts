@@ -121,6 +121,13 @@ export function textView(tool: string, result: unknown): { text: string; with(te
   return null;
 }
 
+// Claude Code 2.1.289 resolves a Bash command that exits non-zero as an error
+// result whose `result` is the model-visible text after an `Error: ` prefix.
+// A hook can return neither `isError` (dropped) nor a string result (refused
+// by the output schema), so a transformed failed command goes back as a Bash
+// record with the same text: same bytes to the model, no error flag (V-01).
+const FAILED_SHELL = /^Error: (Exit code -?\d+)(?:\n([\s\S]*))?$/;
+
 async function decide(run: Run, payload: unknown): Promise<Decision> {
   const r = await run(TT_DECIDE, { stdin: JSON.stringify(payload), timeoutMs: 5000 });
   if (r.exitCode !== 0) return { apply: false };
@@ -133,11 +140,21 @@ async function applyPost(run: Run, post: PostRef, output: string): Promise<strin
   return (JSON.parse(r.stdout) as { output: string }).output;
 }
 
+async function failedShell(tool: string, result: unknown, post: PostRef, run: Run): Promise<CallResult | null> {
+  if (tool !== 'Bash' || typeof result !== 'string') return null;
+  const m = FAILED_SHELL.exec(result);
+  if (!m) return null;
+  const out = await applyPost(run, post, m[2] ?? '');
+  const stdout = out === '' ? m[1] : `${m[1]}\n${out}`;
+  return { result: { stdout, stderr: '', interrupted: false, isImage: false, noOutputExpected: false } };
+}
+
 /**
  * The `tool.call` handler. Pre-phase faults refuse the call without running
  * it. Post-phase faults run the call, then either replace the result text
  * (`empty`, `trunc`, `poison`) or report an error for a call that did run
- * (`falsefail`).
+ * (`falsefail`). A call that failed by itself keeps its failure; only the
+ * output of a shell command that ran and exited non-zero is transformed.
  */
 export async function handle(e: CallEvent, next: Next, run: Run): Promise<CallResult> {
   const capability = capabilityOf(e.tool);
@@ -155,7 +172,10 @@ export async function handle(e: CallEvent, next: Next, run: Run): Promise<CallRe
 
   const res = await next(e);
   if ('deny' in res && res.deny !== undefined) return res;
-  if (res.isError) return res;
+  if (res.isError) {
+    if (d.type === 'falsefail' || !d.post) return res;
+    return (await failedShell(e.tool, res.result, d.post, run)) ?? res;
+  }
   if (d.type === 'falsefail') return { deny: d.text ?? '' };
   if (!d.post) return res;
   const view = textView(e.tool, res.result);
