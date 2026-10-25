@@ -336,6 +336,7 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-sla-breach/solution/oracle_client.py"] = client
     files[ROOT / "s-warranty-returns/solution/oracle_client.py"] = client
     files[ROOT / "s-warranty-returns/solution/oracle_inventory.py"] = (ROOT / "oracle_inventory.py").read_text()
+    files.update(fixtures_docs.batch1_outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
