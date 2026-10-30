@@ -195,3 +195,12 @@ def test_track_s_reads_the_gateway_log_and_the_job_profile(tmp_path: Path):
     m = s["profiles"]["moderate"]
     assert m["faults_unjoined"] == 0 and m["faults_by_type"] == {"empty": 2, "err": 1}
     assert (m["delivered"], m["delivery_verifiable"]) == (3, 3)
+
+
+def test_codex_exec_command_joins_bash_records_and_its_header_is_read_past():
+    obs = "Chunk ID: 6cb903\nWall time: 0.0000 seconds\nProcess exited with code 0\nOriginal token count: 0\nOutput:\n"
+    joined = join_events([_event(0, "Bash", "shell")], [("exec_command", obs, {"cmd": "ls"})])
+    assert joined[0][1] == obs
+    assert delivered("empty", obs, "", None)
+    assert delivered("empty", "Wall time: 0.0096 seconds\nOutput:", "", None)
+    assert not delivered("empty", 'Wall time: 0.02 seconds\nOutput:\n{"id": 1}', "", None)

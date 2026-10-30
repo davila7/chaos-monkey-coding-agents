@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, TaskDecl, read_status, task_decls, unlogged
+from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, TaskDecl, read_status, task_decls, unlogged
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -48,7 +48,8 @@ def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tu
     by_tool: dict[str, list[tuple[Any, ...]]] = {}
     for c in calls:
         if not unlogged(c[0], c[2] if len(c) > 2 else {}, c[1]):
-            by_tool.setdefault(_MCP_PREFIX.sub("", c[0]), []).append(c)
+            name = _MCP_PREFIX.sub("", c[0])
+            by_tool.setdefault(LOG_NAMES.get(name, name), []).append(c)
     seen: Counter[str] = Counter()
     out = []
     for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):

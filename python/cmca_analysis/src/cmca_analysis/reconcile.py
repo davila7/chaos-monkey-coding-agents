@@ -45,6 +45,17 @@ def fx_inner(observation: str) -> str:
     return observation
 
 
+# The header Codex 0.163.0 puts before a command, patch or MCP result (V-28):
+# `Chunk ID`, `Wall time`, `Process exited with code`, `Original token count`
+# or `Exit code` lines, then `Output:`.
+_CODEX_FRAME = re.compile(r"^(?:(?:Chunk ID|Wall time|Process exited with code|Original token count|Exit code):? [^\n]*\n)+Output:(?:\n|$)")
+
+
+def codex_inner(observation: str) -> str:
+    """The tool output after Codex's header; the input otherwise."""
+    return _CODEX_FRAME.sub("", observation, count=1)
+
+
 def mcp_text(observation: str) -> str:
     """The text content of an MCP result that fx passed on as raw JSON; the input otherwise."""
     try:
@@ -64,7 +75,7 @@ def delivered(
     if fault_type in TEXT_TYPES:
         # fx passes the raw MCP result on, so the payload can arrive JSON-escaped.
         return bool(payload) and (payload in observation or json.dumps(payload)[1:-1] in observation)
-    observation = fx_inner(observation)
+    observation = fx_inner(codex_inner(observation))
     if fault_type == "empty":
         s = _EXIT_STATUS.sub("", mcp_text(observation)).strip()
         return s == "" or (len(s) < 300 and bool(_EMPTY_RENDERING.search(s)))
@@ -86,7 +97,7 @@ def attribution_visible(fault_type: str, observation: str, payload: str) -> bool
     """Whether the harness wrapped a delivered text payload in text of its own (SPEC 7.2)."""
     if fault_type not in TEXT_TYPES or not payload:
         return None
-    text = mcp_text(observation)
+    text = mcp_text(codex_inner(observation))
     if payload not in text:
         return None
     return text.strip() != payload.strip()

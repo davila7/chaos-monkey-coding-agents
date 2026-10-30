@@ -72,6 +72,11 @@ def bare_name(tool: str) -> str:
     return MCP_PREFIX.sub("", tool)
 
 
+# Codex 0.163.0 hooks report `exec_command` as `Bash` (V-02), so the fault log
+# names the call differently from the trajectory.
+LOG_NAMES = {"exec_command": "Bash"}
+
+
 @dataclass
 class Call:
     index: int
@@ -91,7 +96,7 @@ class Call:
 
     @property
     def command(self) -> str | None:
-        cmd = self.args.get("command")
+        cmd = self.args.get("command", self.args.get("cmd"))  # `cmd`: Codex exec_command
         return cmd if isinstance(cmd, str) else None
 
 
@@ -262,7 +267,7 @@ def join(events: list[dict[str, Any]], calls: list[Call]) -> list[tuple[dict[str
     by_tool: dict[str, list[Call]] = {}
     for c in calls:
         if not unlogged(c.name, c.args, c.observation):
-            by_tool.setdefault(c.name, []).append(c)
+            by_tool.setdefault(LOG_NAMES.get(c.name, c.name), []).append(c)
     seen: Counter[str] = Counter()
     out = []
     for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
