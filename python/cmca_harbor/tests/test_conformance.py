@@ -197,3 +197,25 @@ def test_fx_inner_reads_inside_fx_framing():
     assert fx_inner("shell", json.dumps({"exit_code": 0, "output_delta": ""})) == ""
     assert fx_inner("grep_files", "") == ""
     assert fx_inner("shell", "not json") == "not json"
+
+
+def test_codex_inner_reads_inside_codex_framing():
+    from cmca_harbor.conformance import codex_inner
+
+    shell = "Chunk ID: a1b2c3\nWall time: 0.0012 seconds\nProcess exited with code 3\nOriginal token count: 2\nOutput:\nline\n"
+    assert codex_inner("exec_command", shell) == "line\n"
+    assert codex_inner("exec_command", shell.replace("line\n", "")) == ""
+    patch = "Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nM a.txt\n"
+    assert codex_inner("apply_patch", patch) == "Success. Updated the following files:\nM a.txt\n"
+    assert codex_inner("exec_command", "unframed") == "unframed"
+
+
+def test_a_tool_can_serve_several_classes():
+    from cmca_harbor.conformance import HARNESSES, class_calls, tool_classes
+
+    tools = HARNESSES["codex"].tools
+    assert tool_classes(tools) == {"shell", "fs.edit", "fs.write"}
+    trajectory = {"steps": [{"tool_calls": [{"function_name": "apply_patch", "tool_call_id": "c1"}], "observation": {"results": [{"source_call_id": "c1", "content": "out"}]}}]}
+    assert class_calls(trajectory, tools, "fs.write") == [("apply_patch", "out")]
+    assert class_calls(trajectory, tools, "fs.edit") == [("apply_patch", "out")]
+    assert class_calls(trajectory, tools, "shell") == []
