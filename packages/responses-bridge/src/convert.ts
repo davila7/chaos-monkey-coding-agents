@@ -20,7 +20,7 @@ type Part = { type: string; text?: string; image_url?: string };
 export type InputItem =
   | { type: 'message'; role: 'user' | 'assistant' | 'developer' | 'system'; content: string | Part[] }
   | { type: 'reasoning'; id?: string; summary?: { type: string; text: string }[]; encrypted_content?: string | null }
-  | { type: 'function_call'; call_id: string; name: string; arguments: string }
+  | { type: 'function_call'; call_id: string; name: string; namespace?: string; arguments: string }
   | { type: 'custom_tool_call'; call_id: string; name: string; input: string }
   | { type: 'function_call_output' | 'custom_tool_call_output'; call_id: string; output: string | Part[] }
   | { type: string; [k: string]: unknown };
@@ -28,12 +28,13 @@ export type InputItem =
 export type ResponsesTool =
   | { type: 'function'; name: string; description?: string; parameters?: Record<string, unknown> | null }
   | { type: 'custom'; name: string; description?: string; format?: { type: string; syntax?: string; definition?: string } }
+  | { type: 'namespace'; name: string; description?: string; tools?: ResponsesTool[] }
   | { type: string; name?: string; [k: string]: unknown };
 
 export type OutputItem =
   | { type: 'message'; id: string; role: 'assistant'; status: 'completed'; content: { type: 'output_text'; text: string; annotations: [] }[] }
   | { type: 'reasoning'; id: string; summary: { type: 'summary_text'; text: string }[]; encrypted_content: string }
-  | { type: 'function_call'; id: string; call_id: string; name: string; arguments: string; status: 'completed' }
+  | { type: 'function_call'; id: string; call_id: string; name: string; namespace?: string; arguments: string; status: 'completed' }
   | { type: 'custom_tool_call'; id: string; call_id: string; name: string; input: string; status: 'completed' };
 
 export interface Options {
@@ -56,6 +57,23 @@ export class ToolNames {
   private toWire = new Map<string, string>();
   private fromWire = new Map<string, string>();
   private freeform = new Set<string>();
+  private namespaced = new Map<string, { namespace: string; name: string }>();
+
+  /**
+   * Codex sends each MCP server's tools as a namespace (`mcp__tickets`) and
+   * routes a call only when it carries `name` and `namespace` separately
+   * (observed with 0.163.0, V-28). The Messages API has no namespaces, so the
+   * tool goes out flat as `<namespace>__<name>`, the form Claude Code uses.
+   */
+  flat(namespace: string, name: string): string {
+    const full = `${namespace}__${name}`;
+    this.namespaced.set(full, { namespace, name });
+    return full;
+  }
+
+  split(full: string): { namespace?: string; name: string } {
+    return this.namespaced.get(full) ?? { name: full };
+  }
 
   markFreeform(name: string): void {
     this.freeform.add(name);
@@ -151,13 +169,16 @@ function parseArgs(args: string): Record<string, unknown> {
   }
 }
 
-export function convertTools(tools: ResponsesTool[] | undefined, names: ToolNames): Anthropic.Tool[] {
+export function convertTools(tools: ResponsesTool[] | undefined, names: ToolNames, namespace?: string): Anthropic.Tool[] {
   const out: Anthropic.Tool[] = [];
   for (const t of tools ?? []) {
-    if (t.type === 'function' && typeof t.name === 'string') {
+    if (t.type === 'namespace' && typeof t.name === 'string' && namespace === undefined) {
+      const ns = t as Extract<ResponsesTool, { type: 'namespace' }>;
+      out.push(...convertTools(ns.tools?.filter((x) => x.type === 'function'), names, ns.name));
+    } else if (t.type === 'function' && typeof t.name === 'string') {
       const f = t as Extract<ResponsesTool, { type: 'function' }>;
       out.push({
-        name: names.wire(f.name),
+        name: names.wire(namespace === undefined ? f.name : names.flat(namespace, f.name)),
         description: f.description ?? '',
         input_schema: (f.parameters ?? { type: 'object', properties: {} }) as Anthropic.Tool.InputSchema,
       });
@@ -179,8 +200,8 @@ export function convertTools(tools: ResponsesTool[] | undefined, names: ToolName
         },
       });
     }
-    // Hosted tools (web_search) and namespaces are not sent: the CMCA config
-    // disables both (D-0044 progress), and the Messages API cannot run them.
+    // Hosted tools (web_search, tool_search) are not sent: the CMCA config
+    // disables both (D-0044), and the Messages API cannot run them.
   }
   return out;
 }
@@ -231,7 +252,8 @@ export function convertInput(
       if (b) push('assistant', [b]);
     } else if (item.type === 'function_call') {
       const f = item as Extract<InputItem, { type: 'function_call' }>;
-      push('assistant', [{ type: 'tool_use', id: f.call_id, name: names.wire(f.name), input: parseArgs(f.arguments) }]);
+      const name = f.namespace ? names.flat(f.namespace, f.name) : f.name;
+      push('assistant', [{ type: 'tool_use', id: f.call_id, name: names.wire(name), input: parseArgs(f.arguments) }]);
     } else if (item.type === 'custom_tool_call') {
       const c = item as Extract<InputItem, { type: 'custom_tool_call' }>;
       push('assistant', [{ type: 'tool_use', id: c.call_id, name: names.wire(c.name), input: { [FREEFORM_FIELD]: c.input } }]);
@@ -327,7 +349,16 @@ export function convertOutput(msg: Pick<Anthropic.Message, 'id' | 'content'>, na
         const text = typeof raw === 'string' ? raw : JSON.stringify(input);
         items.push({ type: 'custom_tool_call', id: `ctc_${id}`, call_id: b.id, name, input: text, status: 'completed' });
       } else {
-        items.push({ type: 'function_call', id: `fc_${id}`, call_id: b.id, name, arguments: JSON.stringify(input), status: 'completed' });
+        const { namespace, name: inner } = names.split(name);
+        items.push({
+          type: 'function_call',
+          id: `fc_${id}`,
+          call_id: b.id,
+          name: inner,
+          ...(namespace ? { namespace } : {}),
+          arguments: JSON.stringify(input),
+          status: 'completed',
+        });
       }
     }
   });
