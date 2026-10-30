@@ -101,7 +101,7 @@ export function defaultArtifacts(root: string): string[] {
   const pkgs = join(root, 'packages');
   const dists = existsSync(pkgs)
     ? readdirSync(pkgs)
-        .filter((p) => p === 'fault-engine' || p.startsWith('injector-'))
+        .filter((p) => p === 'fault-engine' || p === 'responses-bridge' || p.startsWith('injector-'))
         .map((p) => join(pkgs, p, p === 'fault-engine' ? 'dist/bin' : 'dist'))
     : [];
   return dists.flatMap(walk).filter((f) => /\.(c|m)?js$/.test(f));

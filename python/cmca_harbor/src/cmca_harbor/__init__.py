@@ -1,7 +1,8 @@
 from cmca_harbor.claude_code import ChaosClaudeCode
+from cmca_harbor.codex import ChaosCodex
 from cmca_harbor.fx import ChaosFx
 from cmca_harbor.fxh import ChaosFxh
 from cmca_harbor.opencode import ChaosOpenCode
 from cmca_harbor.pi import ChaosPi
 
-__all__ = ["ChaosClaudeCode", "ChaosFx", "ChaosFxh", "ChaosOpenCode", "ChaosPi"]
+__all__ = ["ChaosClaudeCode", "ChaosCodex", "ChaosFx", "ChaosFxh", "ChaosOpenCode", "ChaosPi"]

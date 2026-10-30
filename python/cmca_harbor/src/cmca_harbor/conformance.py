@@ -63,12 +63,26 @@ def fx_inner(tool: str, text: str) -> str:
     return text
 
 
+_CODEX_FRAME = re.compile(
+    r"^(?:Chunk ID: [^\n]*\nWall time: [^\n]*\nProcess exited with code -?\d+\nOriginal token count: \d+\n"
+    r"|Exit code: \d+\nWall time: [^\n]*\n)Output:\n(.*)$",
+    re.S,
+)
+
+
+def codex_inner(tool: str, text: str) -> str:
+    """The output inside the frame Codex puts around a command or patch result (V-02)."""
+    m = _CODEX_FRAME.match(text)
+    return m.group(1) if m else text
+
+
 @dataclass(frozen=True)
 class Harness:
     agent: str
     harness_dir: str
-    # Tool names in ATIF trajectories, mapped to capability classes.
-    tools: dict[str, str]
+    # Tool names in ATIF trajectories, mapped to capability classes. A tuple
+    # for a tool that serves several classes, such as Codex's apply_patch.
+    tools: dict[str, str | tuple[str, ...]]
     # Maps (tool, observation) to the output inside harness framing, for the
     # checks of transformed outputs. None: the observation is the output.
     inner: Callable[[str, str], str] | None = None
@@ -96,7 +110,21 @@ HARNESSES = {
         {"read_file": "fs.read", "write_file": "fs.write", "edit_file": "fs.edit", "grep_files": "fs.search", "glob_files": "fs.search", "shell": "shell"},
         fx_inner,
     ),
+    "codex": Harness(
+        "cmca_harbor:ChaosCodex",
+        "codex",
+        {"exec_command": "shell", "apply_patch": ("fs.edit", "fs.write")},
+        codex_inner,
+    ),
 }
+
+
+def tool_classes(tools: dict[str, str | tuple[str, ...]]) -> set[str]:
+    return {c for v in tools.values() for c in ((v,) if isinstance(v, str) else v)}
+
+
+def serves(classes: str | tuple[str, ...] | None, capability: str) -> bool:
+    return classes == capability or (isinstance(classes, tuple) and capability in classes)
 
 CLASSES = tuple(PROBES)
 
@@ -214,7 +242,7 @@ def broken_build(build: Path, harness: Harness, out: Path) -> None:
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(build, out)
-    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js", "fxh": "index.cjs"}[harness.harness_dir]
+    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js", "fxh": "index.cjs", "codex": "index.cjs"}[harness.harness_dir]
     (out / harness.harness_dir / entry).write_text('throw new Error("unavailable");\n')
 
 
@@ -230,7 +258,7 @@ def plan(
     by_type: dict[str, list[str]] = {}
     # A class with no mapped tool cannot be exposed; fs.search stays for
     # harnesses that list search tools, so a missing tool is observed, not assumed.
-    for t, c in [(t, c) for t, c in cells() if c in h.tools.values()]:
+    for t, c in [(t, c) for t, c in cells() if c in tool_classes(h.tools)]:
         cfg_dir = out / "configs" / t
         cfg_dir.mkdir(parents=True, exist_ok=True)
         (cfg_dir / f"{PROBES[c].task}.json").write_text(json.dumps(engine_config(harness, version, t, c), indent=2))
@@ -266,13 +294,13 @@ def _text(content: Any) -> str:
     return "\n".join(p.get("text") or "" for p in content if isinstance(p, dict))
 
 
-def class_calls(trajectory: dict[str, Any], tools: dict[str, str], capability: str) -> list[tuple[str, str]]:
+def class_calls(trajectory: dict[str, Any], tools: dict[str, str | tuple[str, ...]], capability: str) -> list[tuple[str, str]]:
     """(tool name, observation text) for each call of the class, in order."""
     out = []
     for step in trajectory.get("steps", []):
         results = {r.get("source_call_id"): r for r in ((step.get("observation") or {}).get("results") or [])}
         for call in step.get("tool_calls") or []:
-            if tools.get(call.get("function_name")) == capability:
+            if serves(tools.get(call.get("function_name")), capability):
                 r = results.get(call.get("tool_call_id"))
                 out.append((call["function_name"], _text(r.get("content")) if r else ""))
     return out
@@ -364,7 +392,7 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
     probes = {p.task: p for p in ALL_PROBES}
     per_cell: dict[tuple[str, str], list[dict[str, Any]]] = {}
     latencies: list[float] = []
-    seen_tools: dict[str, str] = {}
+    seen_tools: dict[str, set[str]] = {}
     for t in TYPES:
         for a in range(RUNS):
             for trial in _trials(jobs, f"conf-{harness}-{t}-a{a}"):
@@ -374,7 +402,7 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
                 per_cell.setdefault((t, c), []).append(r)
                 # A call the injector never saw (a tool the harness lacks) is not mapped.
                 if r["tool"] and r["logged"]:
-                    seen_tools[r["tool"]] = c
+                    seen_tools.setdefault(r["tool"], set()).add(c)
                 ev = trial / "agent/tt/events.jsonl"
                 if ev.exists():
                     latencies += [json.loads(x).get("latency_ms", 0) for x in ev.read_text().splitlines() if x.strip()]
@@ -424,7 +452,7 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
         "harness": harness,
         "version": version,
         "generated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "tool_map": dict(sorted(seen_tools.items())),
+        "tool_map": {tool: ", ".join(sorted(cs)) for tool, cs in sorted(seen_tools.items())},
         "faults": faults,
         "parity_set": [t for t in TYPES if faults[t]["supported"]],
         "parity_gaps": parity_gaps,

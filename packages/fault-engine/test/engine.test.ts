@@ -100,7 +100,7 @@ describe('repository data files', () => {
 
   it('every config parses', () => {
     const files = readdirSync(`${ROOT}configs`).filter((f) => f.endsWith('.yaml'));
-    expect(files).toHaveLength(7);
+    expect(files).toHaveLength(8);
     for (const f of files) expect(loadHarnessConfig(`${ROOT}configs/${f}`).id).toBe(f.replace('.yaml', ''));
   });
 });

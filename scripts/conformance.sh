@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs SPEC 9.6 conformance for one harness version and writes its capability file.
-#   scripts/conformance.sh <claude-code|pi|opencode> <version> <model id> [--gap type:class=reason ...]
+#   scripts/conformance.sh <claude-code|pi|opencode|codex> <version> <model id> [--gap type:class=reason ...]
 # Needs Docker, uv, pnpm and ANTHROPIC_API_KEY. Each cell runs 3 times.
 # CONFORMANCE_HARBOR_ARGS is appended to every `harbor run`. The default triples
 # the agent setup timeout: on slow hosts, parallel harness installs pass 360 s.
@@ -16,6 +16,8 @@ case $harness in
   claude-code) build=packages/injector-claude-code/dist/tt; harbor_model=$model ;;
   pi) build=packages/injector-pi/dist/tt; harbor_model=anthropic/$model ;;
   opencode) build=packages/injector-opencode/dist/tt; harbor_model=anthropic/$model ;;
+  # Codex reaches Claude through packages/responses-bridge, built below (D-0044).
+  codex) build=packages/injector-codex/dist/tt; harbor_model=$model ;;
   *) echo "unknown harness: $harness" >&2; exit 2 ;;
 esac
 : "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}"
@@ -23,7 +25,8 @@ esac
 unset ANTHROPIC_BASE_URL
 
 pnpm install --frozen-lockfile
-pnpm -r build
+# The site is not needed here, and `next build` stops on a Next.js advisory (unaddressed).
+pnpm -r --filter '!@cmca/site' build
 work=$jobs/plan
 mkdir -p "$work"
 uv run python -m cmca_harbor.conformance plan --harness "$harness" --version "$version" \
