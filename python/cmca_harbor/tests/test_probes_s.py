@@ -83,3 +83,9 @@ def test_write_probe_checks_the_comment_and_the_side_effect(tmp_path):
     assert probes_s.check_trial(trial, None)["passed"]
     (trial / "verifier/state.json").write_text(json.dumps({"mutations": [one, one]}))
     assert not probes_s.check_trial(trial, None)["passed"]
+
+
+def test_tool_calls_accept_codex_bare_mcp_names():
+    step = {"tool_calls": [{"tool_call_id": "1", "function_name": "get_ticket"}, {"tool_call_id": "2", "function_name": "exec_command"}],
+            "observation": {"results": [{"source_call_id": "1", "content": "Wall time: 0.02 seconds\nOutput:\n{}"}]}}
+    assert probes_s.tool_calls({"steps": [step]}, "get_ticket") == [("get_ticket", "Wall time: 0.02 seconds\nOutput:\n{}")]
