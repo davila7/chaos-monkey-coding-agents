@@ -204,3 +204,5 @@ def test_codex_exec_command_joins_bash_records_and_its_header_is_read_past():
     assert delivered("empty", obs, "", None)
     assert delivered("empty", "Wall time: 0.0096 seconds\nOutput:", "", None)
     assert not delivered("empty", 'Wall time: 0.02 seconds\nOutput:\n{"id": 1}', "", None)
+    running = "Chunk ID: 1a2b3c\nWall time: 10.0021 seconds\nProcess running with session ID 4\nOriginal token count: 0\nOutput:\n"
+    assert delivered("empty", running, "", None)

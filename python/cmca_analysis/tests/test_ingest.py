@@ -3,7 +3,7 @@ import tomllib
 
 import pytest
 
-from cmca_analysis.ingest import DATASETS, MCP_SERVERS, Call, bare_name, join
+from cmca_analysis.ingest import DATASETS, MCP_SERVERS, Call, args_hash, bare_name, join
 from cmca_analysis.reconcile import delivered
 
 
@@ -89,3 +89,43 @@ def test_join_maps_codex_exec_command_to_bash_records():
     events = [{"seq": 0, "tool_name": "Bash"}, {"seq": 1, "tool_name": "apply_patch"}]
     assert [c.index for _, c in join(events, calls)] == [0, 1]
     assert calls[0].command == "ls"
+
+
+# Hashes produced by packages/fault-engine (`shortHash(canonicalArgs(...))`).
+ENGINE_HASHES = [
+    ("shell", {"command": "  git   log\n --oneline -3 "}, "b4acdf0d583d3bb4"),
+    ("shell", {"command": 'echo "ñandú" | wc -c', "description": "x"}, "1838dad415a9b136"),
+    ("mcp.tickets", {"query": "status:open", "limit": 5, "filters": {"b": [1, 2], "a": "z"}}, "9b755cc6d8fd79b3"),
+    ("mcp.tickets", {"id": "T-12", "note": "café, línea\nsegunda"}, "c28e62bf64e9422c"),
+]
+
+
+@pytest.mark.parametrize(("capability", "args", "expected"), ENGINE_HASHES)
+def test_args_hash_matches_the_engine(capability, args, expected):
+    assert args_hash(capability, args) == expected
+
+
+def test_args_hash_reads_codex_cmd_and_skips_path_capabilities():
+    assert args_hash("shell", {"cmd": "git log --oneline -3"}) == "b4acdf0d583d3bb4"
+    assert args_hash("fs.read", {"path": "a.py"}) is None
+    assert args_hash("shell", {}) is None
+
+
+def test_join_pairs_parallel_calls_by_args_hash():
+    cmds = ["sleep 2; ls", "cat a", "cat b"]
+    calls = [Call(i, i, i, "exec_command", {"cmd": c}, "") for i, c in enumerate(cmds)]
+    # Logged in completion order, not trajectory order.
+    events = [{"seq": i, "tool_name": "Bash", "capability": "shell", "args_hash": args_hash("shell", {"command": c})}
+              for i, c in enumerate(["cat b", "sleep 2; ls", "cat a"])]
+    assert [c.index for _, c in join(events, calls)] == [2, 0, 1]
+
+
+def test_join_falls_back_to_position_without_a_matching_hash():
+    calls = [Call(i, i, i, "Bash", {"command": c}, "") for i, c in enumerate(["a", "b", "c"])]
+    events = [
+        {"seq": 0, "tool_name": "Bash", "capability": "shell", "args_hash": args_hash("shell", {"command": "c"})},
+        {"seq": 1, "tool_name": "Bash", "capability": "shell"},
+        {"seq": 2, "tool_name": "Bash", "capability": "shell", "args_hash": "0000000000000000"},
+        {"seq": 3, "tool_name": "Bash", "capability": "shell"},
+    ]
+    assert [c.index if c else None for _, c in join(events, calls)] == [2, 0, 1, None]

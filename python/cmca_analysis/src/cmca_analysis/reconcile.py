@@ -46,9 +46,10 @@ def fx_inner(observation: str) -> str:
 
 
 # The header Codex 0.163.0 puts before a command, patch or MCP result (V-28):
-# `Chunk ID`, `Wall time`, `Process exited with code`, `Original token count`
+# `Chunk ID`, `Wall time`, `Process exited with code` (or `Process running with
+# session ID` for a command still running), `Original token count`
 # or `Exit code` lines, then `Output:`.
-_CODEX_FRAME = re.compile(r"^(?:(?:Chunk ID|Wall time|Process exited with code|Original token count|Exit code):? [^\n]*\n)+Output:(?:\n|$)")
+_CODEX_FRAME = re.compile(r"^(?:(?:Chunk ID|Wall time|Process exited with code|Process running with session ID|Original token count|Exit code):? [^\n]*\n)+Output:(?:\n|$)")
 
 
 def codex_inner(observation: str) -> str:

@@ -1,11 +1,12 @@
 #!/bin/sh
 # One Codex session against stub.py, inside the container. MODE: none, block or deny.
-# UNTRUSTED=1 leaves out --dangerously-bypass-hook-trust (V-03).
+# UNTRUSTED=1 leaves out --dangerously-bypass-hook-trust (V-03). SCRIPT and MATCH override
+# the stub script and the hook matcher.
 set -e
 trust=--dangerously-bypass-hook-trust
 [ -n "${UNTRUSTED:-}" ] && trust=
 mkdir -p /out
-LOG=/out/requests.jsonl SCRIPT=/work/script.json python3 /work/stub.py & sleep 1
+LOG=/out/requests.jsonl SCRIPT=${SCRIPT:-/work/script.json} python3 /work/stub.py & sleep 1
 export CODEX_HOME=/tmp/ch; mkdir -p $CODEX_HOME /tmp/proj; cd /tmp/proj; echo hello > a.txt
 cat > $CODEX_HOME/config.toml <<T
 model_provider = "stub"
@@ -21,13 +22,13 @@ supports_websockets = false
 hooks = true
 multi_agent = false
 [[hooks.PreToolUse]]
-matcher = "^(Bash|apply_patch)\$"
+matcher = "${MATCH:-^(Bash|apply_patch)\$}"
 [[hooks.PreToolUse.hooks]]
 type = "command"
 command = "/work/hook.sh"
 timeout = 30
 [[hooks.PostToolUse]]
-matcher = "^(Bash|apply_patch)\$"
+matcher = "${MATCH:-^(Bash|apply_patch)\$}"
 [[hooks.PostToolUse.hooks]]
 type = "command"
 command = "/work/hook.sh"

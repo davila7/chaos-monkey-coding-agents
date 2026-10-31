@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, TaskDecl, read_status, task_decls, unlogged
+from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, TaskDecl, pair, read_status, task_decls, unlogged
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -50,23 +50,11 @@ def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tu
         if not unlogged(c[0], c[2] if len(c) > 2 else {}, c[1]):
             name = _MCP_PREFIX.sub("", c[0])
             by_tool.setdefault(LOG_NAMES.get(name, name), []).append(c)
-    seen: Counter[str] = Counter()
-    out = []
-    for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
-        name = e.get("tool_name") or ""
-        same = by_tool.get(name, [])
-        i = seen[name]
-        seen[name] += 1
-        out.append((e, same[i] if i < len(same) else None))
-    return out
+    return pair(events, by_tool, lambda c: c[2] if len(c) > 2 else {})
 
 
 def join_events(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], str | None]]:
-    """Pairs each record with the observation of its call.
-
-    The n-th record for a tool name belongs to the n-th trajectory call of that
-    tool: the injector logs every call of a mapped tool, exempt ones included.
-    """
+    """Pairs each record with the observation of its call (`ingest.pair`)."""
     return [(e, c[1] if c else None) for e, c in _join(events, calls)]
 
 

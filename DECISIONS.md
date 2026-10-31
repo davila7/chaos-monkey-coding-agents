@@ -1388,3 +1388,11 @@ Alternatives considered:
 - Leave the M5 artifacts as published: they would no longer match the code that produces them (CLAUDE.md rule 4).
 
 Consequences: one join rule for all configs; M5 boards and site numbers stay as published; codex-claude rows reach the site with Track N fidelity under the bar and marked as such, unless the owner asks for the bar first.
+
+Implementation notes (2026-10-31, after the owner merged this plan in PR #73; no model calls):
+
+1. `ingest.args_hash` and `ingest.pair` hold the join; `ingest.join` and `trials._join` call `pair`. `tests/test_ingest.py` checks `args_hash` against four hashes produced by `packages/fault-engine` (`shortHash(canonicalArgs(...))`), Codex's `cmd` key, parallel calls logged out of order, and the positional fallback.
+2. `results/2026-10-20-m5` regenerated: only `track-s/opencode-claude/summary.json` changes, as measured. The site data from it is identical to the published file.
+3. Deviation from item 4: the site takes one `site-data/1` file from one `cmca analyze` run, so the codex rows are published as release `results/2026-10-31-m5-codex`, built from the M5 evidence plus `results/pilot/2026-10-30-codex-{n,s}/`, not as a codex-only release. Every M5 config summary in it equals `results/2026-10-20-m5` apart from the evidence list; the Track N Holm-adjusted p values change because they now correct over six comparisons. `results/2026-10-20-m5` stays the M5 release.
+4. `results/pilot/2026-10-30-codex-{n,s}/summary.json` regenerated with the new join: `moderate` delivered Track N 87 of 88, Track S 121 of 121. Report `reports/2026-10-31-codex-claude.md`.
+5. Item 5: the stub check is in the V-02 addendum of 2026-10-31. `PostToolUse` for a command that outlives its yield fires only when the process ends during a `write_stdin` poll, and the block text replaces that `write_stdin` result; a process that never ends fires none. The miss stands until an injector fix is planned.
