@@ -28,6 +28,13 @@ export default function Home() {
             <img className="mark" src="/monkey.svg" alt="" width={700} height={724} />
             <img className="title" src="/banner-text.png" alt="" width={1472} height={724} />
           </div>
+        </header>
+
+        <section id="ranking" className="block">
+          <HomeChart rows={headlineRanking(data)} />
+        </section>
+
+        <section id="about" className="block intro">
           <p className="lede">
             Seeded tool-call failures injected into unmodified coding-agent harnesses. Which harness still finishes the task,
             what recovery costs, and whether it reports the outcome honestly.
@@ -40,10 +47,6 @@ export default function Home() {
               View the code &rarr;
             </a>
           </div>
-        </header>
-
-        <section id="ranking" className="block">
-          <HomeChart rows={headlineRanking(data)} />
         </section>
 
         <section id="results" className="block">
