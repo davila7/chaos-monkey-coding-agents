@@ -1437,3 +1437,38 @@ Alternatives considered:
 - Other harnesses, not checked against binaries: Goose (Block, Apache 2.0, native Anthropic provider), Cline CLI (native Anthropic provider), Crush (Charm, native Anthropic provider), Qwen Code (Gemini CLI fork, OpenAI-compatible providers). Each needs its own check of headless mode and tool hooks before a plan. Gemini CLI stays excluded (SPEC 4), Antigravity stays out (D-0038), Aider has no MCP or hook surface for Track N.
 
 Consequences: if V-29 passes, Muse Code joins the single benchmark with rows comparable to the published ones, with a note that the model route goes through the bridge. Muse is proprietary and auto-updating, so the pin and the egress check carry more weight than for the open-source harnesses.
+
+## D-0047 Muse Code with Muse Spark on the native axis, replacing `muse-claude` (plan)
+
+- Date: 2026-10-31
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 6 and the caps in item 7. Each paid step still starts only after the owner's go in the project thread.
+
+Context: V-30 found that the Meta Model API Terms cover Muse Code and forbid "any modification enabling any Downloadable Materials to operate with any model or service not provided by Meta" (10.1(xiv)), which is the purpose of `muse-claude` (D-0046). Publishing benchmarks is restricted only when done "for the purpose of promoting or marketing a competing product or service" (10.1(xi)). The owner chose on 2026-10-31 to run Muse Code with its own model ("Muse con su modelo (muse-spark)"). Meta prices per million tokens, Standard mode, read 2026-10-31 (https://dev.meta.ai/docs/pricing-rate-limits): `muse-spark-1.3` input $1.25, cached input $0.15, output $4.25; no cache write price listed; 3,000 requests and 4,000,000 tokens per minute per team. Contributor mode is cheaper but lets Meta train on prompts and outputs. The default model of Muse Code is `muse-spark-1.2` (https://dev.meta.ai/docs/muse-code/configuration); the models page marks `muse-spark-1.3` "Recommended for new work" (https://dev.meta.ai/docs/models).
+
+Decision:
+
+1. **Config `muse-spark`** on the native axis (SPEC 6.2), Tracks S and N: Muse Code pinned by version and sha256 from Meta's manifest with auto-update off, through Meta's own provider (`--provider meta`, no `--base-url`), Standard mode (`--contributor-mode off`), full autonomy (`muse exec --yolo` inside the trial container). The model is the vendor's recommended model on the pin date, pinned to an exact ID; on 2026-10-31 that is `muse-spark-1.3`. Reasoning effort is Muse Code's default (`high`), recorded in the config. Contributor mode is not used: task content would become training data.
+2. **D-0046 items 1, 2 and 4 are withdrawn.** `muse-claude` is not built and the bridge is not used with Muse. D-0046 items 3 (verification), 5 (injector) and 6 (SPEC) carry over to `muse-spark`, with the changes below.
+3. **Verification.** V-29 runs against Meta's API with the pinned binary in a container, not against a stand-in, so Muse never talks to a non-Meta model service: (a) headless `exec --json` events and the `run.usage` line, and how they map to Harbor's trajectory and cost; (b) built-in tool names and their SPEC 6 capability mapping, from Muse's own tool list in its JSONL events; (c) hook schema, payload, `PreToolUse` deny, and `PostToolUse` replacement of a result and its framing; (d) MCP through the Track S gateway; (e) egress: hosts contacted during a run (Meta API and telemetry are expected); (f) `capabilities/muse@<version>.json`. Format recovery from the binary is not used (V-30, 10.1(x)); only documentation, help text, the MIT SDK, and observed behavior.
+4. **Track N injector** `packages/injector-muse` through Muse's documented hook files. Hooks are a documented extension point, not a change to the binary; V-30 records this reading. If (c) shows no result replacement, Muse runs Track S plus pre-phase faults on Track N and the board says so.
+5. **Cost.** Trial cost from Muse's `run.usage` at the Meta list prices above, cross-checked against the Meta dashboard total for the gate. Spend is billed by Meta to the owner's Meta account, not to the Anthropic credit.
+6. **Board.** `muse-spark` sits on the native axis next to `cc-claude`. Differences against Claude configs mix harness and model, and the board says so, as SPEC 6.2 does for native configs.
+7. **Trials and spend.** Same tasks, profiles, n and seed as M5: 144 trials. No Muse Spark cost has been measured. The projection takes the measured per-trial cost of `codex-claude` (D-0044 Progress 6: $35.47 for 144, mean $0.246) and the price ratio Meta to Anthropic list (input 0.63, cached input 1.5, output 0.43) as a range of 0.4x to 1.5x, so $14 to $53 for the main run, $58 with 10% reruns.
+
+| Step | Trials | Projection | Cap (Meta billing) |
+|---|---|---|---|
+| Conformance and V-29 probes with the model | about 50 | under $2 | $5 |
+| Cost gate (SPEC 20) | 20 | $2 to $8 | $10 |
+| Main run | 144 | $14 to $53, $58 with 10% reruns | $65 |
+| Total | | | $80 |
+
+   The run script stops when the projected total passes the cap. If the gate projects the main run above $65, it does not start and the owner gets the gate numbers.
+
+Alternatives considered:
+
+- `muse-claude` (D-0046): blocked by 10.1(xiv) (V-30).
+- Contributor mode: about 12 times cheaper on input, but Meta may train on the tasks, which would leak the benchmark.
+- `muse-spark-1.2`, Muse Code's built-in default: the models page recommends 1.3 for new work; the native axis takes the vendor's recommended model.
+- Asking Meta for written permission for `muse-claude`: open-ended wait; can be done later without blocking this.
+
+Consequences: Muse Code joins the single benchmark as a native-axis row with Meta's model, paid on a Meta account. It does not isolate the harness effect as the fixed-axis configs do.
