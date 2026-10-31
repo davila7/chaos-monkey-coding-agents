@@ -1396,3 +1396,44 @@ Implementation notes (2026-10-31, after the owner merged this plan in PR #73; no
 3. Deviation from item 4: the site takes one `site-data/1` file from one `cmca analyze` run, so the codex rows are published as release `results/2026-10-31-m5-codex`, built from the M5 evidence plus `results/pilot/2026-10-30-codex-{n,s}/`, not as a codex-only release. Every M5 config summary in it equals `results/2026-10-20-m5` apart from the evidence list; the Track N Holm-adjusted p values change because they now correct over six comparisons. `results/2026-10-20-m5` stays the M5 release.
 4. `results/pilot/2026-10-30-codex-{n,s}/summary.json` regenerated with the new join: `moderate` delivered Track N 87 of 88, Track S 121 of 121. Report `reports/2026-10-31-codex-claude.md`.
 5. Item 5: the stub check is in the V-02 addendum of 2026-10-31. `PostToolUse` for a command that outlives its yield fires only when the process ends during a `write_stdin` poll, and the block text replaces that `write_stdin` result; a process that never ends fires none. The miss stands until an injector fix is planned.
+
+## D-0046 Muse Code with Claude on Tracks S and N (plan)
+
+- Date: 2026-10-31
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 6 and the spend caps in item 7. Each paid step still starts only after the owner's go in the project thread.
+
+Context: the owner asked on 2026-10-31 to add more coding agents, naming Muse Code ("Podemos agregar otros agent coding ? Por ejemplo muse code"). Spend comes from the same 200 USD Anthropic credit as D-0044, of which $40.04 is spent. Checked on 2026-10-31, no model call and no binary run:
+
+- Muse Code is Meta's terminal coding agent, built for the Muse Spark models, proprietary, installed as a native `muse` binary by `https://dev.meta.ai/install.sh` (https://dev.meta.ai/docs/muse-code). The install script fetches a launcher that resolves a release channel; `https://api.meta.ai/muse-code/channels/muse-stable` names `1.4.14-R7309.1` today, with a per-version manifest that carries a sha256 per platform. The launcher auto-updates every hour unless `MUSE_NO_AUTO_UPDATE=1`.
+- Headless: `muse exec "<prompt>"` with `--json` (JSONL events, a `run.usage` line before the run ends since 1.4.11), `--yolo` (no approvals, no OS sandbox, trusted workspace), `--max-model-steps`, `--reasoning-effort` (https://docs.e2b.dev/agents/muse; changelog https://dev.meta.ai/docs/muse-code/changelog). The changelog has container fixes (1.4.6, 1.4.12).
+- Model route: the built-in provider is Meta's Model API (`META_API_KEY`); the changelog mentions Claude and GPT models "served through the Meta gateway", billed by Meta, not by the Anthropic credit. A `--base-url` flag exists (third-party CLI reference, https://qainsights.com/?p=18730) and `endpoint_transport.base_url` is a config key (changelog 1.4.8/1.4.9). An unofficial gateway (https://github.com/LimpingNinja/muse-gateway) points Muse at a loopback endpoint and serves `POST /responses`, which indicates Muse speaks the Responses API, the same wire as Codex. Not verified against the binary.
+- Hooks: 17 events, among them `PreToolUse`, `PostToolUse`, `PostToolUseFailure` and `PostToolBatch`, from `<project>/.muse/hooks.json`, user settings, or a managed file; project hooks run only in a trusted workspace (https://dev.meta.ai/docs/muse-code/extending). The changelog shows hooks that block calls and rewrite tool input (1.4.4) and installs Claude Code plugins with hooks. The hook schema, the stdin payload, and whether `PostToolUse` can replace a tool result are not documented on the pages read.
+- MCP: `mcp_servers` in `~/.config/muse/settings.json`, `stdio` or `streamable_http` (same page). Built-in tool names are not documented on the pages read.
+- Terms: no clause on benchmarking or publishing results found yet in Meta's Muse Code or Model API terms; not read in full.
+
+Decision:
+
+1. **Config `muse-claude`** on the fixed-model axis, Tracks S and N, model `claude-sonnet-5-5`, reasoning as `cc-claude`, full autonomy (`muse exec --yolo` inside the trial container). Muse is pinned to the newest stable release at least 7 days old on the pin date, by version and sha256 from Meta's manifest, with auto-update off. A native pair `muse-spark` (Meta model, Meta billing) stays out of this plan.
+2. **Model route: the existing bridge.** `packages/responses-bridge` from D-0044 serves Muse at the loopback base URL, so Muse never calls Meta's API for inference. Any Muse-specific request shape (tools, reasoning, usage) is added to the bridge with fixtures. Cost from the bridge usage log at Anthropic list prices, as `codex-claude`.
+3. **Verification before any trial** (no model calls), with the pinned binary in a container against the V-28 Messages API stand-in, recorded as V-29: (a) `--base-url` to the bridge works, the wire is the Responses API, and Muse starts without a Meta sign-in (a placeholder key at most); (b) with egress blocked except the bridge, Muse makes no call to Meta hosts during a run, or the calls are telemetry that a setting turns off, recorded in V-29; (c) built-in tool names and their mapping to SPEC 6 capabilities; (d) hook schema, payload, `PreToolUse` deny, and `PostToolUse` replacement of a result and how it is framed to the model (as V-02 for Codex); (e) MCP through the Track S gateway; (f) `capabilities/muse@<version>.json`. V-30 reads Meta's Muse Code and Model API terms for benchmarking and publication, as V-17 did for Vercel.
+4. **Stop rule.** If (a) fails (Muse cannot reach a custom endpoint, or needs a Meta account per run), the plan stops and the owner gets the evidence; Claude through Meta's gateway is not a substitute, since it is billed outside the credit and the route is not inspectable. If (d) shows no result replacement, `muse-claude` runs Track S only with pre-phase faults on Track N, as fx did before the fork (D-0027), and the board says so.
+5. **Track N injector** `packages/injector-muse` on the shared decision code, Harbor glue `ChaosMuse` in `python/cmca_harbor`, conformance 6 of 6 types plus `probe-shell-fail`.
+6. **SPEC.** Section 4 adds Muse Code to the in-scope harnesses and the config table; section 6 adds its tool mapping after V-29.
+7. **Trials and spend.** Same tasks, profiles, n and seed as M5 and `codex-claude`: 144 trials. Projection as D-0044 item 6 (M5 Claude configs per trial: Track S $0.124 to $0.218, Track N $0.286 to $0.541; `codex-claude` measured $35.47 for its 144).
+
+| Step | Trials | Projection | Cap |
+|---|---|---|---|
+| Conformance with the model | about 40 | under $1 | $3 |
+| Cost gate (SPEC 20) | 20 | $4.10 to $7.59 | $10 |
+| Main run | 144 | $29.52 to $54.65, $60.12 with 10% reruns | $65 |
+| Total | | | $78 |
+
+   With D-0044's $40.04, the credit stays at or below $118.04 of 200 USD. The run script stops when the projected total passes the cap. If the gate projects the main run above $65, it does not start.
+
+Alternatives considered:
+
+- `muse-spark` on Meta's model: the native pair, but needs a Meta API account and budget, and compares models rather than harnesses on the fixed axis.
+- Claude through Meta's gateway: no bridge to maintain, but billed by Meta and not inspectable.
+- Other harnesses, not checked against binaries: Goose (Block, Apache 2.0, native Anthropic provider), Cline CLI (native Anthropic provider), Crush (Charm, native Anthropic provider), Qwen Code (Gemini CLI fork, OpenAI-compatible providers). Each needs its own check of headless mode and tool hooks before a plan. Gemini CLI stays excluded (SPEC 4), Antigravity stays out (D-0038), Aider has no MCP or hook surface for Track N.
+
+Consequences: if V-29 passes, Muse Code joins the single benchmark with rows comparable to the published ones, with a note that the model route goes through the bridge. Muse is proprietary and auto-updating, so the pin and the egress check carry more weight than for the open-source harnesses.
