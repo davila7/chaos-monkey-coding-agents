@@ -10,6 +10,7 @@ The fault log is `agent/tt/events.jsonl` on Track N and the gateway's
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import re
 import subprocess
@@ -20,11 +21,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 CATALOG_PATH = REPO_ROOT / "packages/fault-engine/catalog/v1.json"
 DATASETS = (REPO_ROOT / "datasets/cmca-n", REPO_ROOT / "datasets/cmca-s")
+
+T = TypeVar("T")
 
 STATUSES = {"success", "partial", "failure"}
 ELIGIBLE = ("pass", "apply")
@@ -257,26 +260,55 @@ def trajectory_steps(trajectory: dict[str, Any] | None) -> tuple[list[str], list
     return messages, calls
 
 
-def join(events: list[dict[str, Any]], calls: list[Call]) -> list[tuple[dict[str, Any], Call | None]]:
-    """Pairs each fault-log record with its trajectory call.
+def args_hash(capability: str | None, args: dict[str, Any]) -> str | None:
+    """The engine's `args_hash` (SPEC 7.4) for `shell` and `mcp.*` arguments, else None.
 
-    The n-th record for a tool name belongs to the n-th trajectory call of that
-    tool: the injector logs every call of a mapped tool, exempt ones included.
-    Calls the injector never sees or does not log (`unlogged`) are skipped.
+    Other capabilities canonicalize paths against the workspace root, which the
+    analysis does not know.
+    """
+    if capability == "shell":
+        cmd = args.get("command", args.get("cmd"))
+        if not isinstance(cmd, str):
+            return None
+        canon = re.sub(r"\s+", " ", cmd.strip())
+    elif capability and capability.startswith("mcp."):
+        canon = json.dumps(args, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    else:
+        return None
+    return hashlib.sha256(canon.encode()).hexdigest()[:16]
+
+
+def pair(events: list[dict[str, Any]], by_tool: dict[str, list[T]], args_of: Callable[[T], dict[str, Any]]) -> list[tuple[dict[str, Any], T | None]]:
+    """Pairs each fault-log record, in sequence order, with an unused call of its tool.
+
+    The call whose arguments hash to the record's `args_hash` wins; otherwise the
+    first unused call, which is the n-th call for the n-th record. Harnesses that
+    run parallel calls of one tool concurrently log them in completion order, so
+    position alone can pair a record with a sibling call (D-0045).
+    """
+    used: set[int] = set()
+    out: list[tuple[dict[str, Any], T | None]] = []
+    for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
+        same = [c for c in by_tool.get(e.get("tool_name") or "", []) if id(c) not in used]
+        want = e.get("args_hash")
+        pick = next((c for c in same if want and args_hash(e.get("capability"), args_of(c)) == want), same[0] if same else None)
+        if pick is not None:
+            used.add(id(pick))
+        out.append((e, pick))
+    return out
+
+
+def join(events: list[dict[str, Any]], calls: list[Call]) -> list[tuple[dict[str, Any], Call | None]]:
+    """Pairs each fault-log record with its trajectory call (`pair`).
+
+    The injector logs every call of a mapped tool, exempt ones included. Calls
+    the injector never sees or does not log (`unlogged`) are skipped.
     """
     by_tool: dict[str, list[Call]] = {}
     for c in calls:
         if not unlogged(c.name, c.args, c.observation):
             by_tool.setdefault(LOG_NAMES.get(c.name, c.name), []).append(c)
-    seen: Counter[str] = Counter()
-    out = []
-    for e in sorted(events, key=lambda r: r.get("seq") if r.get("seq") is not None else -1):
-        name = e.get("tool_name") or ""
-        same = by_tool.get(name, [])
-        i = seen[name]
-        seen[name] += 1
-        out.append((e, same[i] if i < len(same) else None))
-    return out
+    return pair(events, by_tool, lambda c: c.args)
 
 
 def parse_job(job: str) -> tuple[str, str | None, int | None]:

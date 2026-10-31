@@ -1,13 +1,15 @@
 """Scripted Responses API stand-in for Codex (V-02, V-03; no model cost).
 
 Each POST to /v1/responses gets the next step of SCRIPT (a JSON list of
-lists of output items) and is appended to LOG.
+lists of output items) and is appended to LOG. `{session_id}` in a step's
+arguments becomes the last `Process running with session ID` in the request.
 
     LOG=<file> SCRIPT=<file> [PORT=8787] python3 stub.py
 """
 
 import json
 import os
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = os.environ["LOG"]
@@ -38,7 +40,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         rid = f"resp_{i}"
         self.wfile.write(sse({"type": "response.created", "response": {"id": rid}}))
+        running = re.findall(r"Process running with session ID (\d+)", json.dumps(body))
         for item in SCRIPT[i]:
+            if running and "arguments" in item:
+                item = {**item, "arguments": item["arguments"].replace("{session_id}", running[-1])}
             self.wfile.write(sse({"type": "response.output_item.done", "item": item}))
         usage = {"input_tokens": 10, "input_tokens_details": {"cached_tokens": 0}, "output_tokens": 5, "output_tokens_details": {"reasoning_tokens": 0}, "total_tokens": 15}
         self.wfile.write(sse({"type": "response.completed", "response": {"id": rid, "usage": usage}}))
