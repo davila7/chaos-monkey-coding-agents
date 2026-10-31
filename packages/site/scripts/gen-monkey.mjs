@@ -241,7 +241,8 @@ ${embers}
 `;
 }
 
-export { build };
+// Shared with scripts/gen-og-scene.mjs, which draws the same monkey in the link preview image.
+export { build, BG, FACE, FACE_PATH, HEAD, PALETTE, cellsToPaths, envelope, frameCells, noise };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeFileSync(OUT, build());
