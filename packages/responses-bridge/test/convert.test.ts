@@ -36,6 +36,20 @@ describe('convertTools', () => {
     expect(names.isFreeform('apply_patch')).toBe(true);
   });
 
+  it('flattens an MCP namespace and maps calls back to name and namespace', () => {
+    const names = new ToolNames();
+    const ns = { type: 'namespace', name: 'mcp__tickets', description: 'Tools in the mcp__tickets namespace.', tools: [{ ...EXEC_TOOL, name: 'get_ticket' }] };
+    const tools = convertTools([EXEC_TOOL, ns, { type: 'tool_search' }], names);
+    expect(tools.map((t) => t.name)).toEqual(['exec_command', 'mcp__tickets__get_ticket']);
+    const [call] = convertOutput({ id: 'm', content: [{ type: 'tool_use', id: 'c1', name: 'mcp__tickets__get_ticket', input: { id: 501 } } as Anthropic.ContentBlock] }, names);
+    expect(call).toMatchObject({ type: 'function_call', call_id: 'c1', name: 'get_ticket', namespace: 'mcp__tickets', arguments: '{"id":501}' });
+    const { messages } = convertInput(
+      { input: [{ type: 'function_call', call_id: 'c1', name: 'get_ticket', namespace: 'mcp__tickets', arguments: '{"id":501}' }] },
+      names,
+    );
+    expect(messages[0]!.content).toEqual([{ type: 'tool_use', id: 'c1', name: 'mcp__tickets__get_ticket', input: { id: 501 } }]);
+  });
+
   it('rewrites names the Messages API refuses and maps them back', () => {
     const names = new ToolNames();
     const [t] = convertTools([{ ...EXEC_TOOL, name: 'docs.search/v2' }], names);

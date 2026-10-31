@@ -82,3 +82,10 @@ def test_delivery_looks_inside_fx_framing():
     assert delivered("poison", _fx_shell("rate = 1.0\n"), "", "tok", stale) is False
     read = "<path>a.py</path>\n<content>\n1 \trate = 1.0\n</content>"
     assert delivered("poison", read, "", "tok", stale) is False
+
+
+def test_join_maps_codex_exec_command_to_bash_records():
+    calls = [Call(0, 0, 0, "exec_command", {"cmd": "ls"}, ""), Call(1, 1, 1, "apply_patch", {}, "")]
+    events = [{"seq": 0, "tool_name": "Bash"}, {"seq": 1, "tool_name": "apply_patch"}]
+    assert [c.index for _, c in join(events, calls)] == [0, 1]
+    assert calls[0].command == "ls"

@@ -178,7 +178,8 @@ def tool_calls(trajectory: dict[str, Any], tool: str) -> list[tuple[str, str]]:
         results = {r.get("source_call_id"): r for r in ((step.get("observation") or {}).get("results") or [])}
         for call in step.get("tool_calls") or []:
             name = call.get("function_name") or ""
-            if "tickets" in name and name.endswith(tool):
+            # Harbor 0.24.0 records Codex MCP calls by the bare tool name (V-28).
+            if name == tool or ("tickets" in name and name.endswith(tool)):
                 r = results.get(call.get("tool_call_id"))
                 out.append((name, _text(r.get("content")) if r else ""))
     return out
