@@ -1472,3 +1472,25 @@ Alternatives considered:
 - Asking Meta for written permission for `muse-claude`: open-ended wait; can be done later without blocking this.
 
 Consequences: Muse Code joins the single benchmark as a native-axis row with Meta's model, paid on a Meta account. It does not isolate the harness effect as the fixed-axis configs do.
+
+## D-0048 Muse Code parity gaps and reminder agents (plan)
+
+- Date: 2026-11-01
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 3; item 4 follows the owner's answer in the project thread. No spend.
+
+Context: V-29 conformance for Muse Code 1.4.14 (79 trials, `capabilities/muse@1.4.14-R7309.1.json`): `deny`, `err` and `falsefail` pass 3 of 3 on every class. Two Muse behaviors stop the other cells, and neither can be changed from a hook. (1) A hook replacement that is the empty string is ignored, so `empty` does not reach the model on `fs.write`, `fs.edit` and `fs.search` (on `fs.read` it does, because Muse keeps its header line). (2) A `bash` call that exits non-zero fires `PostToolUseFailure`, whose output is added next to the result and never replaces it, so `empty`, `trunc` and `poison` cannot reach the model for such a command; `probe-shell` passes 3 of 3 and `probe-shell-fail` fails 3 of 3. `PostToolBatch` blocking cancels the run (V-29 run `h`). Separately, Muse runs reminder agents by default whose model calls are partly missing from its logs, so per-trial cost is a lower bound when they run (V-29 (a)).
+
+Decision:
+
+1. **`empty` on `fs.write`, `fs.edit`, `fs.search`** is a declared parity gap for `muse@1.4.14-R7309.1`, reason "Muse keeps the original result when a hook replacement is empty", as for Claude Code's `empty` on `fs.write` and `fs.edit`.
+2. **Post-phase shell faults on failed commands.** `empty`, `trunc` and `poison` stay on `shell` for Muse. When a call with a post-phase decision ends in `PostToolUseFailure`, `injector-muse` logs a second record for that call with `decision: "undelivered"` and reason `failed-call`, through a new `tt-decide --undelivered` mode that writes only the log record. `cmca analyze` counts delivery over calls without such a record and reports the count per config; the capability report counts `probe-shell-fail` as not applicable for Muse and records the gap as `shell (exit != 0)`. The board shows the note on `muse-spark` rows.
+3. **Capabilities.** The capability file is regenerated from the committed evidence with these gaps; conformance is not rerun.
+4. **Reminder agents** (owner's choice, asked in the thread): (a) default on, as Muse ships, with cost reported as a lower bound and the gate figure cross-checked against the Meta dashboard; or (b) `--disable-reminders` in every trial, with full cost in the logs, and the config records that Muse runs without them.
+
+Alternatives considered:
+
+- Gap `empty`, `trunc` and `poison` on all of `shell` for Muse: Muse would get no post-phase shell faults, the class most Track N tasks use.
+- Rewriting the command so it always exits 0: mutates shell arguments (CLAUDE.md rule 12).
+- A whitespace replacement for `empty`: not the empty result the type means, and untested.
+
+Consequences: Muse's Track N rows compare on all six types, with fewer delivered post-phase shell faults than configs whose harness shows failed commands as plain results; analysis reports the undelivered count so the difference is visible. Items 2 and 3 need code in `fault-engine`, `injector-muse`, `cmca_harbor.conformance` and `cmca_analysis` with tests; no model calls.

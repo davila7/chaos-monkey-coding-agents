@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs SPEC 9.6 conformance for one harness version and writes its capability file.
-#   scripts/conformance.sh <claude-code|pi|opencode|codex> <version> <model id> [--gap type:class=reason ...]
-# Needs Docker, uv, pnpm and ANTHROPIC_API_KEY. Each cell runs 3 times.
+#   scripts/conformance.sh <claude-code|pi|opencode|codex|muse> <version> <model id> [--gap type:class=reason ...]
+# Needs Docker, uv, pnpm and ANTHROPIC_API_KEY (META_API_KEY for muse). Each cell runs 3 times.
 # CONFORMANCE_HARBOR_ARGS is appended to every `harbor run`. The default triples
 # the agent setup timeout: on slow hosts, parallel harness installs pass 360 s.
 set -euo pipefail
@@ -18,9 +18,15 @@ case $harness in
   opencode) build=packages/injector-opencode/dist/tt; harbor_model=anthropic/$model ;;
   # Codex reaches Claude through packages/responses-bridge, built below (D-0044).
   codex) build=packages/injector-codex/dist/tt; harbor_model=$model ;;
+  # Muse Code calls Meta's API with its own model (D-0047).
+  muse) build=packages/injector-muse/dist/tt; harbor_model=meta/$model ;;
   *) echo "unknown harness: $harness" >&2; exit 2 ;;
 esac
-: "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}"
+if [ "$harness" = muse ]; then
+  : "${META_API_KEY:?set META_API_KEY}"
+else
+  : "${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}"
+fi
 # Harbor's Pi agent treats any ANTHROPIC_BASE_URL as a custom endpoint (V-10).
 unset ANTHROPIC_BASE_URL
 

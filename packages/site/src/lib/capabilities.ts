@@ -14,7 +14,8 @@ const ClassResult = z.object({
 
 const FaultResult = z.object({
   supported: z.boolean(),
-  delivered_as: z.string(),
+  // null for a type the harness does not support (`cmca_harbor.conformance report`).
+  delivered_as: z.string().nullable(),
   attribution_visible: z.boolean(),
   runs_passed: count,
   classes: z.record(z.string(), ClassResult),

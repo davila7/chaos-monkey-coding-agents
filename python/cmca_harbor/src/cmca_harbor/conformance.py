@@ -76,6 +76,26 @@ def codex_inner(tool: str, text: str) -> str:
     return m.group(1) if m else text
 
 
+# An emptied file shows the header line alone.
+_MUSE_READ = re.compile(r"^Read text file [^\n]*(?:\n(.*))?$", re.S)
+
+
+def muse_inner(tool: str, text: str) -> str:
+    """The tool output inside Muse's framing: file lines without `N|`, or the `output` of a bash result (V-29)."""
+    if tool == "read_file":
+        m = _MUSE_READ.match(text)
+        if m:
+            return "".join(re.sub(r"^\d+\|", "", line) for line in (m.group(1) or "").splitlines(keepends=True))
+    if tool == "bash":
+        try:
+            o = json.loads(text)
+        except ValueError:
+            return text
+        if isinstance(o, dict) and isinstance(o.get("output"), str):
+            return o["output"]
+    return text
+
+
 @dataclass(frozen=True)
 class Harness:
     agent: str
@@ -115,6 +135,12 @@ HARNESSES = {
         "codex",
         {"exec_command": "shell", "apply_patch": ("fs.edit", "fs.write")},
         codex_inner,
+    ),
+    "muse": Harness(
+        "cmca_harbor:ChaosMuse",
+        "muse",
+        {"read_file": "fs.read", "write_file": "fs.write", "edit_file": "fs.edit", "search": "fs.search", "bash": "shell"},
+        muse_inner,
     ),
 }
 
@@ -242,7 +268,7 @@ def broken_build(build: Path, harness: Harness, out: Path) -> None:
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(build, out)
-    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js", "fxh": "index.cjs", "codex": "index.cjs"}[harness.harness_dir]
+    entry = {"cc": "hooks/register.js", "pi": "index.js", "oc": "index.js", "fxh": "index.cjs", "codex": "index.cjs", "muse": "index.cjs"}[harness.harness_dir]
     (out / harness.harness_dir / entry).write_text('throw new Error("unavailable");\n')
 
 
