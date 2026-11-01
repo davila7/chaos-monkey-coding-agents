@@ -12,7 +12,9 @@ Harbor writes, so nothing is added to the task workspace. Muse runs hooks with
 a cleared environment (V-29), so the command carries the injector's paths.
 """
 
+import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -47,6 +49,33 @@ def usage_cost(model: str | None, prompt: int | None, cached: int | None, output
     return ((prompt - cached) * price["input"] + cached * price["cached_input"] + output * price["output"]) / 1e6
 
 
+def redact_builtin_prompts(trajectory: dict[str, Any]) -> int:
+    """Replaces the text of `system` steps, Muse Code's built-in prompts, with
+    their sha256 and length, in the trajectory and its subagent trajectories.
+
+    The prompts are part of Meta's Downloadable Materials, which the terms do
+    not let us redistribute (V-30, 10.1(xiv)); trial evidence is published.
+    """
+    n = 0
+    for step in trajectory.get("steps") or []:
+        message = step.get("message")
+        if step.get("source") == "system" and isinstance(message, str) and not message.startswith("[redacted"):
+            digest = hashlib.sha256(message.encode()).hexdigest()
+            step["message"] = f"[redacted: Muse Code built-in prompt, sha256 {digest}, {len(message)} characters (V-30)]"
+            n += 1
+    for child in trajectory.get("subagent_trajectories") or []:
+        n += redact_builtin_prompts(child)
+    return n
+
+
+def redact_file(path: Path) -> int:
+    trajectory = json.loads(path.read_text())
+    n = redact_builtin_prompts(trajectory)
+    if n:
+        path.write_text(json.dumps(trajectory, indent=2) + "\n")
+    return n
+
+
 class ChaosMuseOptions(MuseCodeOptions, TtOptions):
     # Muse starts reminder agents that make their own model calls; their cost
     # is only partly in the session logs (V-29).
@@ -56,6 +85,9 @@ class ChaosMuseOptions(MuseCodeOptions, TtOptions):
 class ChaosMuse(TtAgentMixin, MuseCode):
     options_model = ChaosMuseOptions
     HARNESS_DIR = "muse"
+    # Harbor 0.24.0's agent writes MCP servers into Muse's settings but does
+    # not declare it, so Harbor refuses Track S tasks without this.
+    capabilities = MuseCode.capabilities.model_copy(update={"mcp_servers": True})
 
     @staticmethod
     def name() -> str:
@@ -125,6 +157,9 @@ class ChaosMuse(TtAgentMixin, MuseCode):
 
     def populate_context_post_run(self, context) -> None:
         super().populate_context_post_run(context)
+        trajectory = self.logs_dir / "trajectory.json"
+        if trajectory.exists():
+            redact_file(trajectory)
         # Harbor sums the tokens of the root session and the child sessions
         # that left a log; Muse reports no price, so cost comes from the list
         # prices. Reminder calls without a log are not in this figure (V-29).

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from cmca_harbor.conformance import muse_inner
-from cmca_harbor.muse import BINARIES, ChaosMuse, usage_cost
+from cmca_harbor.muse import BINARIES, ChaosMuse, redact_builtin_prompts, usage_cost
 
 PIN = "1.4.14-R7309.1"
 
@@ -77,4 +77,35 @@ def test_inner_output_of_muse_results():
     shell = json.dumps({"chunk_id": "exec-1-1", "exit_code": 0, "output": "a\n", "truncated": False}, indent=2)
     assert muse_inner("bash", shell) == "a\n"
     assert muse_inner("read_file", "Read text file `a.txt`.\n1|x\n2|y") == "x\ny"
+    assert muse_inner("read_file", "Read text file `a.txt`.") == ""
     assert muse_inner("write_file", "wrote 1 bytes") == "wrote 1 bytes"
+
+
+def test_track_s_servers_reach_muse_settings(tmp_path):
+    from harbor.models.task.config import MCPServerConfig
+
+    assert ChaosMuse.capabilities.mcp_servers
+    a = ChaosMuse(
+        logs_dir=tmp_path,
+        model_name="meta/muse-spark-1.3",
+        version=PIN,
+        mcp_servers=[MCPServerConfig(name="tickets", transport="streamable-http", url="http://gateway:8080/mcp")],
+    )
+    assert a._build_effective_config()["mcp_servers"]["tickets"] == {
+        "enabled": True,
+        "mode": "required",
+        "transport": "streamable_http",
+        "url": "http://gateway:8080/mcp",
+    }
+
+
+def test_builtin_prompts_are_redacted_everywhere():
+    t = {
+        "steps": [{"source": "user", "message": "task"}, {"source": "system", "message": "You are the harness."}],
+        "subagent_trajectories": [{"steps": [{"source": "system", "message": "You watch another agent."}]}],
+    }
+    assert redact_builtin_prompts(t) == 2
+    assert t["steps"][0]["message"] == "task"
+    assert t["steps"][1]["message"].startswith("[redacted: Muse Code built-in prompt, sha256 ")
+    assert "You watch" not in json.dumps(t)
+    assert redact_builtin_prompts(t) == 0

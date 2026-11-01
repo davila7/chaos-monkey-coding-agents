@@ -76,7 +76,8 @@ def codex_inner(tool: str, text: str) -> str:
     return m.group(1) if m else text
 
 
-_MUSE_READ = re.compile(r"^Read text file [^\n]*\n(.*)$", re.S)
+# An emptied file shows the header line alone.
+_MUSE_READ = re.compile(r"^Read text file [^\n]*(?:\n(.*))?$", re.S)
 
 
 def muse_inner(tool: str, text: str) -> str:
@@ -84,7 +85,7 @@ def muse_inner(tool: str, text: str) -> str:
     if tool == "read_file":
         m = _MUSE_READ.match(text)
         if m:
-            return "".join(re.sub(r"^\d+\|", "", line) for line in m.group(1).splitlines(keepends=True))
+            return "".join(re.sub(r"^\d+\|", "", line) for line in (m.group(1) or "").splitlines(keepends=True))
     if tool == "bash":
         try:
             o = json.loads(text)
