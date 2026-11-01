@@ -1473,10 +1473,16 @@ Alternatives considered:
 
 Consequences: Muse Code joins the single benchmark as a native-axis row with Meta's model, paid on a Meta account. It does not isolate the harness effect as the fixed-axis configs do.
 
+Progress (2026-11-01, owner's go in the project thread: "ok" for the $5 of verification and conformance, "activos ok gate" for the gate, and "Subir el tope a $110" on the decision card for the main run):
+
+1. V-29 and conformance done, about $4.01 of the $5 (V-29); gaps under D-0048.
+2. SPEC 20 cost gate, seed `gate-2026-11-01`, the D-0044 gate tasks, Muse's reminder agents on (D-0048 item 4). Track N `clean` 4 of 5 ($4.6703, mean $0.9341); Track S `clean` 5 of 5 ($1.1553, mean $0.2311), `moderate` 4 of 5 ($2.2561, mean $0.4512; 22 faults applied, 14 of 14 verifiable delivered, none undeliverable). Track N `moderate` did not run: at the Track N `clean` mean it would have passed the $10 cap. No infrastructure failure. Gate total $8.0817, a lower bound (V-29 (a)). Evidence `results/smoke/2026-11-01-track-{n,s}-muse/`.
+3. Projection for the main run (72 trials per track, Track N at the `clean` mean, Track S at the mean of both profiles, $0.3411): $91.81, $100.99 with 10% reruns, above the $65 cap of item 7, so the run did not start. The owner raised the main-run cap to $110 (Meta billing) on 2026-11-01. With items 1 and 2 the Muse spend stays at or below about $122.
+
 ## D-0048 Muse Code parity gaps and reminder agents (plan)
 
 - Date: 2026-11-01
-- Status: Proposed. Merging the PR that carries this entry approves items 1 to 3; item 4 follows the owner's answer in the project thread. No spend.
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 3; item 4 follows the owner's answer in the project thread. No spend. Item 4: the owner chose (a), reminder agents on, on 2026-11-01.
 
 Context: V-29 conformance for Muse Code 1.4.14 (79 trials, `capabilities/muse@1.4.14-R7309.1.json`): `deny`, `err` and `falsefail` pass 3 of 3 on every class. Two Muse behaviors stop the other cells, and neither can be changed from a hook. (1) A hook replacement that is the empty string is ignored, so `empty` does not reach the model on `fs.write`, `fs.edit` and `fs.search` (on `fs.read` it does, because Muse keeps its header line). (2) A `bash` call that exits non-zero fires `PostToolUseFailure`, whose output is added next to the result and never replaces it, so `empty`, `trunc` and `poison` cannot reach the model for such a command; `probe-shell` passes 3 of 3 and `probe-shell-fail` fails 3 of 3. `PostToolBatch` blocking cancels the run (V-29 run `h`). Separately, Muse runs reminder agents by default whose model calls are partly missing from its logs, so per-trial cost is a lower bound when they run (V-29 (a)).
 
