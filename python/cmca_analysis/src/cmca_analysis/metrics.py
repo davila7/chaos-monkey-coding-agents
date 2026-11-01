@@ -205,6 +205,8 @@ def validity(trials: Sequence[Trial]) -> dict[str, Any]:
         "trials": n,
         "faults_applied": len(faults),
         "faults_unjoined": sum(1 for f in faults if f.call is None),
+        # Applied faults the harness gave no way to deliver, outside `faults_applied` (D-0048).
+        "faults_undeliverable": sum(len(t.undeliverable) for t in trials),
         "delivery_verifiable": len(verifiable),
         "delivered": sum(1 for f in verifiable if f.delivered),
         "injection_fidelity": (sum(1 for f in verifiable if f.delivered) / len(verifiable)) if verifiable else None,
@@ -223,7 +225,7 @@ def validity(trials: Sequence[Trial]) -> dict[str, Any]:
 def by_fault_type(analyses: Sequence[TrialAnalysis], trials: Sequence[Trial]) -> dict[str, dict[str, Any]]:
     """Per fault type: applied, delivered of verifiable, outcomes and event recovery rate."""
     out: dict[str, dict[str, Any]] = {}
-    types = sorted({f.type for t in trials for f in t.faults})
+    types = sorted({f.type for t in trials for f in [*t.faults, *t.undeliverable]})
     for ty in types:
         fs = [f for t in trials for f in t.faults if f.type == ty]
         evs = [e for a in analyses for e in a.events if e.fault.type == ty]
@@ -231,6 +233,7 @@ def by_fault_type(analyses: Sequence[TrialAnalysis], trials: Sequence[Trial]) ->
         counts = Counter(e.outcome for e in evs)
         out[ty] = {
             "applied": len(fs),
+            "undeliverable": sum(1 for t in trials for f in t.undeliverable if f.type == ty),
             "delivery_verifiable": len(ver),
             "delivered": sum(1 for f in ver if f.delivered),
             "classified": len(evs),

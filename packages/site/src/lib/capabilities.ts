@@ -10,6 +10,10 @@ const ClassResult = z.object({
   exposed: z.boolean(),
   attribution_visible: z.boolean(),
   gap: z.string().optional(),
+  // Probe runs set aside from the cell (D-0048); their scope is in `call_gaps`.
+  not_applicable: z
+    .array(z.object({ probe: z.string(), runs: count, runs_passed: count, reason: z.string() }))
+    .optional(),
 });
 
 const FaultResult = z.object({
@@ -31,6 +35,10 @@ export const Capabilities = z.object({
   faults: z.record(z.string(), FaultResult),
   parity_set: z.array(z.string()),
   parity_gaps: z.array(z.object({ type: z.string(), capability: z.string(), reason: z.string() })),
+  // Gaps on a kind of call within a class, which the engine still faults (D-0048).
+  call_gaps: z
+    .array(z.object({ type: z.string(), capability: z.string(), probe: z.string(), reason: z.string() }))
+    .default([]),
   crash_behavior: z.enum(['fail_open', 'fail_closed']),
   injector_p95_ms: z.number().nonnegative(),
 });
@@ -61,6 +69,8 @@ export interface Cell {
   runs: number;
   runs_passed: number;
   reason?: string;
+  /** Probes set aside from this cell as not applicable. */
+  set_aside?: string[];
 }
 
 export const CLASS_ORDER = ['fs.read', 'fs.write', 'fs.edit', 'fs.search', 'fs.list', 'shell'];
@@ -81,7 +91,11 @@ export function grid(caps: Capabilities[], c: Capabilities) {
     classes.map((k): Cell => {
       const r = c.faults[t]!.classes[k];
       if (!r) return { state: applies.has(`${t}:${k}`) ? 'not_tested' : 'n/a', runs: 0, runs_passed: 0 };
-      const base = { runs: r.runs, runs_passed: r.runs_passed };
+      const base = {
+        runs: r.runs,
+        runs_passed: r.runs_passed,
+        ...(r.not_applicable?.length ? { set_aside: r.not_applicable.map((n) => n.probe) } : {}),
+      };
       if (r.gap) return { state: 'gap', ...base, reason: r.gap };
       if (!r.exposed) return { state: 'not_tested', ...base };
       return { state: r.runs > 0 && r.runs_passed === r.runs ? 'delivered' : 'failed', ...base };

@@ -3,6 +3,7 @@
     python -m cmca_harbor.conformance tasks
     python -m cmca_harbor.conformance plan --harness pi --version 1.0.3 --model anthropic/<id> --build <dir> --out <dir>
     python -m cmca_harbor.conformance report --harness pi --version 1.0.3 --jobs <dir> [--gap empty:fs.write=<reason>]
+        [--not-applicable trunc:probe-shell-fail=<reason>]
 """
 
 import argparse
@@ -412,11 +413,29 @@ def _p95(values: list[float]) -> float | None:
     return round(s[max(0, math.ceil(0.95 * len(s)) - 1)], 3)
 
 
-def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], str]) -> dict[str, Any]:
-    """The capability file for one harness version from its conformance jobs."""
+# What a probe that conformance can mark not applicable stands for, as the
+# `capability` of its entry in `call_gaps` (D-0048).
+PROBE_SCOPES = {"probe-shell-fail": "shell (exit != 0)"}
+
+
+def report(
+    harness: str,
+    version: str,
+    jobs: Path,
+    gaps: dict[tuple[str, str], str],
+    not_applicable: dict[tuple[str, str], str] | None = None,
+) -> dict[str, Any]:
+    """The capability file for one harness version from its conformance jobs.
+
+    `not_applicable` maps (type, probe task) to a reason: the probe's runs of
+    that type leave its class's cell and the file lists the scope it stands
+    for under `call_gaps`, a gap the engine does not read (D-0048).
+    """
     h = HARNESSES[harness]
+    not_applicable = not_applicable or {}
     probes = {p.task: p for p in ALL_PROBES}
     per_cell: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    set_aside: dict[tuple[str, str], dict[str, int]] = {}
     latencies: list[float] = []
     seen_tools: dict[str, set[str]] = {}
     for t in TYPES:
@@ -425,7 +444,12 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
                 probe = probes[_task_of(trial)]
                 c = probe.capability
                 r = check_trial(trial, harness, t, c, probe)
-                per_cell.setdefault((t, c), []).append(r)
+                if (t, probe.task) in not_applicable:
+                    counts = set_aside.setdefault((t, probe.task), {"runs": 0, "runs_passed": 0})
+                    counts["runs"] += 1
+                    counts["runs_passed"] += int(r["passed"])
+                else:
+                    per_cell.setdefault((t, c), []).append(r)
                 # A call the injector never saw (a tool the harness lacks) is not mapped.
                 if r["tool"] and r["logged"]:
                     seen_tools.setdefault(r["tool"], set()).add(c)
@@ -450,6 +474,9 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
             if (t, c) in gaps:
                 cell["gap"] = gaps[(t, c)]
                 parity_gaps.append({"type": t, "capability": c, "reason": gaps[(t, c)]})
+            na = [{"probe": task, **set_aside[(t, task)], "reason": why} for (nt, task), why in sorted(not_applicable.items()) if nt == t and probes[task].capability == c and (t, task) in set_aside]
+            if na:
+                cell["not_applicable"] = na
             classes[c] = cell
         exposed = {c: v for c, v in classes.items() if v["exposed"]}
         counted = {c: v for c, v in exposed.items() if "gap" not in v}
@@ -482,6 +509,17 @@ def report(harness: str, version: str, jobs: Path, gaps: dict[tuple[str, str], s
         "faults": faults,
         "parity_set": [t for t in TYPES if faults[t]["supported"]],
         "parity_gaps": parity_gaps,
+        **(
+            {
+                "call_gaps": [
+                    {"type": t, "capability": PROBE_SCOPES.get(task, task), "probe": task, "reason": why}
+                    for (t, task), why in sorted(not_applicable.items(), key=lambda kv: (TYPES.index(kv[0][0]), kv[0][1]))
+                    if (t, task) in set_aside
+                ]
+            }
+            if not_applicable
+            else {}
+        ),
         "crash_behavior": crash_behavior,
         "injector_p95_ms": _p95(latencies),
     }
@@ -524,6 +562,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--task", action="append", help="only these probe tasks, no crash job (repeatable)")
     r.add_argument("--jobs", required=True, type=Path)
     r.add_argument("--gap", action="append", default=[], help="type:class=reason, a cell conformance showed undeliverable (D-0017)")
+    r.add_argument(
+        "--not-applicable",
+        action="append",
+        default=[],
+        help="type:probe=reason, a probe whose runs of that type cannot deliver on this harness (D-0048)",
+    )
     r.add_argument("--out", type=Path, default=REPO_ROOT / "capabilities")
     r.add_argument("--evidence", type=Path, default=REPO_ROOT / "results/conformance", help="where the trial evidence is copied")
     args = ap.parse_args(argv)
@@ -544,7 +588,16 @@ def main(argv: list[str] | None = None) -> int:
         if (t, c) not in cells() or not reason:
             ap.error(f"--gap {g!r}: expected type:class=reason for a cataloged cell")
         gaps[(t, c)] = reason
-    caps = report(args.harness, args.version, args.jobs, gaps)
+    na = {}
+    tasks = {p.task: p for p in ALL_PROBES}
+    for g in args.not_applicable:
+        cell, _, reason = g.partition("=")
+        t, _, task = cell.partition(":")
+        probe = tasks.get(task)
+        if probe is None or t not in (probe.types or TYPES) or not reason:
+            ap.error(f"--not-applicable {g!r}: expected type:probe=reason for a type the probe runs")
+        na[(t, task)] = reason
+    caps = report(args.harness, args.version, args.jobs, gaps, na)
     args.out.mkdir(parents=True, exist_ok=True)
     path = args.out / f"{args.harness}@{args.version}.json"
     path.write_text(json.dumps(caps, indent=2) + "\n")

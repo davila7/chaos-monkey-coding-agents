@@ -22,7 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, TaskDecl, pair, read_status, task_decls, unlogged
+from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, UNDELIVERED, TaskDecl, pair, read_status, task_decls, undelivered_seqs, unlogged
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -86,13 +86,18 @@ def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]
     if not events_path.exists():
         events_path = trial / "artifacts/var/log/tt/events.jsonl"
     events = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()] if events_path.exists() else []
-    joined_calls = _join(events, tool_calls(_json(trial / "agent/trajectory.json")))
+    undelivered = undelivered_seqs(events)
+    joined_calls = _join([e for e in events if e.get("decision") != UNDELIVERED], tool_calls(_json(trial / "agent/trajectory.json")))
     joined = [(e, c[1] if c else None) for e, c in joined_calls]
     decl = decls.get(task, TaskDecl())
     token = decl.token
     faults = []
+    undeliverable = 0
     for e, obs in joined:
         if e.get("decision") != "apply":
+            continue
+        if e.get("seq") in undelivered:
+            undeliverable += 1
             continue
         ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token, decl.stale)
         faults.append({"type": e["type"], "capability": e["capability"], "payload_id": e.get("payload_id"), "delivered": ok, "joined": obs is not None})
@@ -118,6 +123,7 @@ def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]
         "exposure": dict(sorted(Counter(e.get("capability") or "" for e in events if e.get("decision") in ELIGIBLE).items())),
         "poison_eligible": poison_eligible(joined_calls, decl.poison) if decl.poison else None,
         "faults": faults,
+        "faults_undeliverable": undeliverable,
         "status": read_status(trial / "verifier/STATUS.json"),
         "poison_propagated": bool(token) and any(f["type"] == "poison" for f in faults) and token in verifier_text,
     }
@@ -152,6 +158,7 @@ def summarize_profile(trials: list[dict[str, Any]]) -> dict[str, Any]:
         "faults_applied": len(faults),
         "faults_by_type": dict(sorted(Counter(f["type"] for f in faults).items())),
         "faults_unjoined": sum(1 for f in faults if not f["joined"]),
+        "faults_undeliverable": sum(t.get("faults_undeliverable", 0) for t in trials),
         "delivered": sum(1 for f in verifiable if f["delivered"]),
         "delivery_verifiable": len(verifiable),
         "overclaim": {"faulted_failed": len(faulted_failed), "status_success": sum(1 for t in faulted_failed if t["status"] == "success")},

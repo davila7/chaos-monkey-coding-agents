@@ -1494,3 +1494,11 @@ Alternatives considered:
 - A whitespace replacement for `empty`: not the empty result the type means, and untested.
 
 Consequences: Muse's Track N rows compare on all six types, with fewer delivered post-phase shell faults than configs whose harness shows failed commands as plain results; analysis reports the undelivered count so the difference is visible. Items 2 and 3 need code in `fault-engine`, `injector-muse`, `cmca_harbor.conformance` and `cmca_analysis` with tests; no model calls.
+
+Implemented 2026-11-01 (approved by the merge of PR #78), no model calls:
+
+- `tt-event/2` gains `decision: "undelivered"` and the optional fields `of_seq` and `reason`; the post reference that `tt-decide` returns carries the `apply` record's `seq`. `tt-decide --undelivered` writes one such record with `seq: null`, so the sequence checks are unchanged.
+- `injector-muse` calls it for every pending post-phase decision whose call ends in `PostToolUseFailure`, reason `failed-call`.
+- `cmca_analysis`: an applied fault with an `undelivered` record leaves `faults` (so it neither counts toward delivery nor excludes the trial) and goes to `Trial.undeliverable`; its call counts as eligible and as not faulted. `validity` reports `faults_undeliverable`, `by_fault_type` reports `undeliverable` per type, and the pilot summary reports `faults_undeliverable` per trial and profile.
+- `cmca_harbor.conformance report --not-applicable type:probe=reason` sets a probe's runs of that type aside from its class's cell and lists the scope under `call_gaps`, which the engine does not read (unlike `parity_gaps`). `capabilities/muse@1.4.14-R7309.1.json` is regenerated from the committed evidence with item 1's gaps and `probe-shell-fail` not applicable for `empty`, `trunc` and `poison`: parity set all six types (V-29). The capabilities page lists `call_gaps` with the parity gaps.
+- The board note on `muse-spark` rows comes with the first Muse results, since no Muse row exists yet; the analysis field it reads is `faults_undeliverable`.

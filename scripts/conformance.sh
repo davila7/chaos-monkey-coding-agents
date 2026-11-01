@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs SPEC 9.6 conformance for one harness version and writes its capability file.
-#   scripts/conformance.sh <claude-code|pi|opencode|codex|muse> <version> <model id> [--gap type:class=reason ...]
+#   scripts/conformance.sh <claude-code|pi|opencode|codex|muse> <version> <model id> [--gap type:class=reason ...] [--not-applicable type:probe=reason ...]
 # Needs Docker, uv, pnpm and ANTHROPIC_API_KEY (META_API_KEY for muse). Each cell runs 3 times.
 # CONFORMANCE_HARBOR_ARGS is appended to every `harbor run`. The default triples
 # the agent setup timeout: on slow hosts, parallel harness installs pass 360 s.

@@ -174,6 +174,16 @@ def test_report_builds_the_parity_set_with_gaps(tmp_path: Path):
     assert caps["faults"]["trunc"]["supported"] is False
     assert caps["crash_behavior"] == "fail_open"
     assert caps["injector_p95_ms"] == 2.0
+    assert "call_gaps" not in caps
+
+    why = "a failed call's result cannot be replaced"
+    na = conf.report("pi", "1.0.3", jobs, {}, {("trunc", "probe-shell-fail"): why})
+    shell = na["faults"]["trunc"]["classes"]["shell"]
+    assert (shell["runs"], shell["runs_passed"]) == (3, 3)
+    assert shell["not_applicable"] == [{"probe": "probe-shell-fail", "runs": 3, "runs_passed": 2, "reason": why}]
+    assert na["faults"]["trunc"]["supported"] is True
+    assert na["call_gaps"] == [{"type": "trunc", "capability": "shell (exit != 0)", "probe": "probe-shell-fail", "reason": why}]
+    assert na["parity_gaps"] == []
 
 
 def test_archive_copies_only_the_evidence(tmp_path: Path):

@@ -3,7 +3,7 @@ import catalog from '../../catalog/v1.json' with { type: 'json' };
 import { canonicalArgs } from '../canonical.js';
 import { createEngine, type FaultEngine } from '../engine.js';
 import { JsonlSink } from '../logger.js';
-import type { CatalogEntry, EngineConfig } from '../schemas.js';
+import type { CatalogEntry, EngineConfig, InjectionRecord } from '../schemas.js';
 import { FileStateStore, MemoryStateStore } from '../state.js';
 import type { CapabilityClass, FaultDecision } from '../types.js';
 import { adapters, fromPostRef, type DecideRequest, type PostRef } from './adapters.js';
@@ -55,6 +55,49 @@ function applyMain(raw: string): void {
 }
 
 /**
+ * `--undelivered`: stdin `{ post, tool_name, capability, reason }`, stdout
+ * `{}`. Logs that an applied post-phase fault did not reach the model
+ * because the call ended where the harness lets no hook replace the result
+ * (D-0048). Writes only that record; trial state is untouched.
+ */
+function undeliveredMain(raw: string): void {
+  try {
+    const p = JSON.parse(raw) as { post?: PostRef; tool_name?: unknown; capability?: unknown; reason?: unknown };
+    if (p.post && typeof p.post.type === 'string') {
+      const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as Partial<EngineConfig>;
+      const record: InjectionRecord = {
+        schema: 'tt-event/2',
+        seq: null,
+        ts: new Date().toISOString(),
+        trial_id: typeof config.trial_id === 'string' ? config.trial_id : null,
+        task_id: typeof config.task_id === 'string' ? config.task_id : '',
+        attempt: typeof config.attempt === 'number' ? config.attempt : 0,
+        harness: typeof config.harness === 'string' ? config.harness : '',
+        layer: config.layer === 'service' ? 'service' : 'native',
+        tool_name: typeof p.tool_name === 'string' ? p.tool_name : '',
+        capability: typeof p.capability === 'string' ? p.capability : '',
+        args_hash: '',
+        key: '',
+        occurrence: 0,
+        decision: 'undelivered',
+        type: p.post.type,
+        payload_id: p.post.payload_id ?? null,
+        exempt_reason: null,
+        agent_id: null,
+        latency_ms: 0,
+        persistence: null,
+        of_seq: typeof p.post.seq === 'number' ? p.post.seq : null,
+        reason: typeof p.reason === 'string' ? p.reason : null,
+      };
+      new JsonlSink(LOG_PATH).write(record);
+    }
+  } catch {
+    // best effort, as for the setup error record
+  }
+  process.stdout.write('{}');
+}
+
+/**
  * Records a failure that happened before the engine could log its own
  * record, so a broken setup shows up as `decision: "error"` instead of a
  * clean-looking trial.
@@ -92,6 +135,7 @@ function logSetupError(raw: Partial<EngineConfig> | null, req: DecideRequest | n
 
 function main(): void {
   if (process.argv.includes('--apply')) return applyMain(readStdin());
+  if (process.argv.includes('--undelivered')) return undeliveredMain(readStdin());
   const adapter = adapters[formatArg(process.argv.slice(2))] ?? adapters.generic!;
   const raw = readStdin();
   let engine: FaultEngine | null = null;

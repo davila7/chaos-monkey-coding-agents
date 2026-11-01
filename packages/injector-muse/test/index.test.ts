@@ -195,6 +195,17 @@ describe('handle with the real engine', () => {
     const e = call('bash', { command: 'cat missing' }, 'c2');
     await h.go(e);
     expect(await h.go({ ...e, hook_event_name: 'PostToolUseFailure', error: shellOut('cat: missing: No such file\n', 1) })).toBeNull();
+    const records = readFileSync(h.log, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as Record<string, unknown>);
+    const applied = records.filter((r) => r.decision === 'apply' && r.tool_name === 'bash').at(-1)!;
+    expect(records.at(-1)).toMatchObject({
+      decision: 'undelivered',
+      seq: null,
+      of_seq: applied.seq,
+      type: 'trunc',
+      tool_name: 'bash',
+      capability: 'shell',
+      reason: 'failed-call',
+    });
   });
 
   it('never faults exempt paths', async () => {
