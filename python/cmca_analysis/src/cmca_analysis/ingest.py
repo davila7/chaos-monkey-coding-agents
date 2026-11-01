@@ -31,6 +31,8 @@ T = TypeVar("T")
 
 STATUSES = {"success", "partial", "failure"}
 ELIGIBLE = ("pass", "apply")
+# A second record for an applied fault the harness gave no way to deliver (D-0048).
+UNDELIVERED = "undelivered"
 # Harnesses prefix MCP tools with the server name: `mcp__tickets__get_ticket`
 # (Claude Code, Pi 1.0.3), `mcp_tickets_get_ticket` (fx), `tickets_get_ticket`
 # (OpenCode 1.18.35, V-25). The gateway logs the bare name. OpenCode's prefix
@@ -114,6 +116,16 @@ class Fault:
     delivered: bool | None = None
     attribution_visible: bool | None = None
     step_id: Any = None
+    undelivered_reason: str | None = None
+
+
+def undelivered_seqs(events: list[dict[str, Any]]) -> dict[int, str]:
+    """`of_seq` to reason, for the applied faults logged as undelivered."""
+    return {
+        e["of_seq"]: e.get("reason") or ""
+        for e in events
+        if e.get("decision") == UNDELIVERED and isinstance(e.get("of_seq"), int)
+    }
 
 
 @dataclass
@@ -146,6 +158,8 @@ class Trial:
     service_state: dict[str, Any] | None
     poison_eligible: bool | None
     problems: list[str] = field(default_factory=list)
+    # Applied faults that never reached the model; not in `faults` (D-0048).
+    undeliverable: list[Fault] = field(default_factory=list)
 
     @property
     def excluded(self) -> bool:
@@ -376,13 +390,15 @@ def load_trial(
     ev_path = events_path(trial)
     events = [json.loads(l) for l in ev_path.read_text().splitlines() if l.strip()] if ev_path.exists() else []
     messages, calls = trajectory_steps(read_json(trial / "agent/trajectory.json"))
-    pairs = join(events, calls)
+    undelivered = undelivered_seqs(events)
+    pairs = join([e for e in events if e.get("decision") != UNDELIVERED], calls)
     for e, c in pairs:
         if c is not None:
             c.capability = e.get("capability")
-            c.decision = e.get("decision")
+            # The model saw the real result of an undelivered fault's call.
+            c.decision = UNDELIVERED if e.get("decision") == "apply" and e.get("seq") in undelivered else e.get("decision")
     decl = decls.get(task, TaskDecl())
-    faults = [
+    applied = [
         Fault(
             seq=e.get("seq"),
             type=e["type"],
@@ -391,10 +407,12 @@ def load_trial(
             persistence=e.get("persistence"),
             call=c.index if c else None,
             step_id=c.step_id if c else None,
+            undelivered_reason=undelivered.get(e["seq"]) if isinstance(e.get("seq"), int) else None,
         )
         for e, c in pairs
         if e.get("decision") == "apply"
     ]
+    faults = [f for f in applied if f.undelivered_reason is None]
 
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
     reward = rewards.get("reward")
@@ -442,6 +460,7 @@ def load_trial(
         verifier_text=_texts(trial, ("verifier/*",)),
         service_state=next((read_json(p) for p in sorted(trial.glob("artifacts/var/lib/*/state.json"))), None),
         poison_eligible=poison_eligible(pairs, decl.poison) if decl.poison else None,
+        undeliverable=[f for f in applied if f.undelivered_reason is not None],
     )
 
 

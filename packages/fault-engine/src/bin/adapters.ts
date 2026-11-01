@@ -18,6 +18,8 @@ export interface PostRef {
   payload_id: string;
   poison_index?: number;
   drift_index?: number;
+  /** Sequence number of the `apply` record, for `tt-decide --undelivered`. */
+  seq?: number;
 }
 
 export function postRef(d: FaultDecision): PostRef | null {
@@ -27,6 +29,7 @@ export function postRef(d: FaultDecision): PostRef | null {
     payload_id: d.payloadId,
     ...(d.poisonIndex !== undefined ? { poison_index: d.poisonIndex } : {}),
     ...(d.driftIndex !== undefined ? { drift_index: d.driftIndex } : {}),
+    ...(d.seq >= 0 ? { seq: d.seq } : {}),
   };
 }
 

@@ -32,9 +32,13 @@ const LABEL: Record<Cell['state'], string> = {
 function CellView({ c }: { c: Cell }) {
   const runs = c.state === 'delivered' || c.state === 'gap' || c.state === 'failed' ? ` ${c.runs_passed}/${c.runs}` : '';
   return (
-    <td className={`cap cap-${c.state.replace('/', '')}`} title={c.reason}>
+    <td
+      className={`cap cap-${c.state.replace('/', '')}`}
+      title={c.reason ?? (c.set_aside ? `not applicable: ${c.set_aside.join(', ')}` : undefined)}
+    >
       {LABEL[c.state]}
       {runs && <span className="sub">{runs}</span>}
+      {c.set_aside && <span className="sub">{c.set_aside.join(', ')} n/a</span>}
     </td>
   );
 }
@@ -127,16 +131,23 @@ export default function CapabilitiesPage() {
                 </table>
               </div>
               <h3 className="cap-sub">Parity gaps</h3>
-              {c.parity_gaps.length === 0 ? (
+              {c.parity_gaps.length + c.call_gaps.length === 0 ? (
                 <p className="page-text">None recorded.</p>
               ) : (
                 <ul className="page-text">
-                  {c.parity_gaps.map((p) => (
+                  {[...c.parity_gaps.map((g) => ({ ...g, probe: undefined })), ...c.call_gaps].map((p) => (
                     <li key={`${p.type}:${p.capability}`}>
                       <code>
                         {p.type} on {p.capability}
                       </code>
                       : {p.reason}
+                      {p.probe && (
+                        <>
+                          {' '}
+                          Runs of <code>{p.probe}</code> are left out of the cell; the fault stays in trials and analysis
+                          counts each one that could not reach the model.
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>

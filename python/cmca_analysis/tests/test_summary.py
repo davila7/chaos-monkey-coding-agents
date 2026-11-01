@@ -206,3 +206,27 @@ def test_codex_exec_command_joins_bash_records_and_its_header_is_read_past():
     assert not delivered("empty", 'Wall time: 0.02 seconds\nOutput:\n{"id": 1}', "", None)
     running = "Chunk ID: 1a2b3c\nWall time: 10.0021 seconds\nProcess running with session ID 4\nOriginal token count: 0\nOutput:\n"
     assert delivered("empty", running, "", None)
+
+
+def test_undelivered_faults_leave_delivery_and_exclusion(tmp_path: Path):
+    """D-0048: an applied fault logged again as undelivered never reached the model."""
+    from cmca_analysis import ingest
+    from cmca_analysis.metrics import validity
+
+    ev = tmp_path / "evidence"
+    undelivered = {**_event(None, "bash", "shell", "undelivered", "trunc", "trunc.half"), "of_seq": 0, "reason": "failed-call"}
+    _trial(ev, "muse-moderate-a0", "t1__u", "t1", "moderate", 0,
+           [("bash", "full output that was not cut"), ("bash", "ok")],
+           [_event(0, "bash", "shell", "apply", "trunc", "trunc.half"), undelivered, _event(1, "bash", "shell")], 1.0, 0.1, "success")
+    path = ev / "muse-moderate-a0/t1__u"
+
+    t = ingest.load_trial(path, ev, {})
+    assert t.faults == []
+    assert [(f.type, f.undelivered_reason) for f in t.undeliverable] == [("trunc", "failed-call")]
+    assert [c.decision for c in t.calls] == ["undelivered", "pass"]
+    assert t.eligible_calls == 2 and not t.excluded
+    v = validity([t])
+    assert (v["faults_applied"], v["faults_undeliverable"], v["undelivered"]) == (0, 1, 0)
+
+    s = summarize(ev, None)["profiles"]["moderate"]
+    assert (s["faults_applied"], s["faults_undeliverable"], s["eligible_calls_min"]) == (0, 1, 2)

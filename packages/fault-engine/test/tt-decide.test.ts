@@ -125,3 +125,38 @@ describe('tt-decide --apply', () => {
     expect(JSON.parse(r.stdout)).toEqual({ output: '' });
   });
 });
+
+describe('tt-decide --undelivered', () => {
+  const undelivered = (env: NodeJS.ProcessEnv, input: string) =>
+    spawnSync(process.execPath, [BIN, '--undelivered'], { env, input, encoding: 'utf8' });
+
+  it('logs an undelivered record that names the apply record, leaving state and sequence alone', async () => {
+    const p = profileWith(profile('moderate'), {
+      base_rate: 1,
+      max_applied_per_trial: 10,
+      weights: { trunc: 1 },
+      persistence: { transient: 1 },
+    });
+    const { env, log } = setup({ profile: p });
+    const first = JSON.parse(await call(env, { tool_name: 'bash', capability: 'shell', args: { command: 'false' } })) as {
+      post: { seq: number };
+    };
+    const r = undelivered(env, JSON.stringify({ post: first.post, tool_name: 'bash', capability: 'shell', reason: 'failed-call' }));
+    expect(r.stdout).toBe('{}');
+    await call(env, { tool_name: 'bash', capability: 'shell', args: { command: 'ls' } });
+    const records = readLog(log);
+    expect(records.map((x) => [x.decision, x.seq])).toEqual([
+      ['apply', 0],
+      ['undelivered', null],
+      ['apply', 1],
+    ]);
+    expect(records[1]).toMatchObject({ type: 'trunc', of_seq: first.post.seq, reason: 'failed-call', capability: 'shell' });
+  });
+
+  it('writes nothing without a post reference or on bad input', () => {
+    const { env, log } = setup();
+    expect(undelivered(env, JSON.stringify({ tool_name: 'bash' })).stdout).toBe('{}');
+    expect(undelivered(env, 'nope').stdout).toBe('{}');
+    expect(() => readFileSync(log, 'utf8')).toThrow();
+  });
+});

@@ -23,6 +23,7 @@ interface PostRef {
   payload_id: string;
   poison_index?: number;
   drift_index?: number;
+  seq?: number;
 }
 interface Decision {
   apply: boolean;
@@ -183,12 +184,17 @@ async function applyPost(run: Run, post: PostRef, output: string): Promise<strin
   return (JSON.parse(await run(['--apply'], JSON.stringify({ post, output }))) as { output: string }).output;
 }
 
+async function undelivered(run: Run, post: PostRef, tool: string, reason: string): Promise<void> {
+  await run(['--undelivered'], JSON.stringify({ post, tool_name: tool, capability: capabilityOf(tool), reason }));
+}
+
 /**
  * Pre-phase faults refuse the call before it runs. Post-phase faults let it
  * run, then replace the text the model sees (`empty`, `trunc`, `poison`) or
  * replace a write or edit result with the failure text (`falsefail`). A call
  * that fails arrives as PostToolUseFailure, whose output cannot replace the
- * result (V-29), so it passes unchanged, as does every error here.
+ * result (V-29), so it passes unchanged and its fault is logged as
+ * undelivered (D-0048). Every error here passes the call unchanged.
  */
 export async function handle(e: CallEvent, run: Run, pending: Pending): Promise<Answer> {
   try {
@@ -209,7 +215,12 @@ export async function handle(e: CallEvent, run: Run, pending: Pending): Promise<
     }
 
     const d = pending.take(e.tool_use_id);
-    if (!d || e.hook_event_name !== 'PostToolUse') return null;
+    if (!d) return null;
+    if (e.hook_event_name === 'PostToolUseFailure') {
+      if (d.post) await undelivered(run, d.post, e.tool_name, 'failed-call');
+      return null;
+    }
+    if (e.hook_event_name !== 'PostToolUse') return null;
     if (d.type === 'falsefail') return { output: d.text ?? '' };
     if (!d.post || typeof e.tool_response !== 'string') return null;
     const view = textView(e.tool_name, e.tool_response);

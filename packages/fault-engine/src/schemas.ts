@@ -168,7 +168,12 @@ export const InjectionRecordSchema = z
     args_hash: z.string(),
     key: z.string(),
     occurrence: z.number().int().min(0),
-    decision: z.enum(['apply', 'pass', 'error']),
+    /**
+     * `undelivered`: a second record for an applied post-phase fault whose
+     * call ended in a way the harness does not let the injector replace
+     * (D-0048). It has no `seq`; `of_seq` names the `apply` record.
+     */
+    decision: z.enum(['apply', 'pass', 'error', 'undelivered']),
     type: FaultTypeSchema.nullable(),
     payload_id: z.string().nullable(),
     exempt_reason: z.string().nullable(),
@@ -176,6 +181,8 @@ export const InjectionRecordSchema = z
     latency_ms: z.number().min(0),
     persistence: z.enum(['transient', 'sticky', 'outage', 'stale']).nullable().optional(),
     error: z.string().nullable().optional(),
+    of_seq: z.number().int().min(0).nullable().optional(),
+    reason: z.string().nullable().optional(),
   })
   .strict();
 export type InjectionRecord = z.infer<typeof InjectionRecordSchema>;

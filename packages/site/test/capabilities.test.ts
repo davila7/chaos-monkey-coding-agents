@@ -18,6 +18,15 @@ describe('committed capability files', () => {
       }
     }
   });
+
+  it('every call gap names a probe set aside from a cell of its type', () => {
+    for (const c of caps) {
+      for (const p of c.call_gaps) {
+        const sets = Object.values(c.faults[p.type]!.classes).flatMap((k) => (k.not_applicable ?? []).map((n) => n.probe));
+        expect(sets).toContain(p.probe);
+      }
+    }
+  });
 });
 
 describe('grid', () => {
@@ -30,6 +39,7 @@ describe('grid', () => {
     faults: { err: { supported: true, delivered_as: 'tool_result', attribution_visible: true, runs_passed: 3, classes } },
     parity_set: ['err'],
     parity_gaps: [],
+    call_gaps: [],
     crash_behavior: 'fail_open',
     injector_p95_ms: 1,
   });
