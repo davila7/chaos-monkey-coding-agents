@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadPosts, parsePost } from '../src/lib/blog';
+import { loadPosts, parsePost, renderPost } from '../src/lib/blog';
 
 describe('blog posts', () => {
   const posts = loadPosts();
@@ -31,5 +31,14 @@ describe('parsePost', () => {
 
   it('rejects a file whose name does not match its date', () => {
     expect(() => parsePost('2026-01-03-hello.md', '---\ntitle: Hi\ndate: 2026-01-02\nsummary: S\n---\nBody\n')).toThrow(/date/);
+  });
+});
+
+describe('renderPost', () => {
+  it('wraps each table in a scroll container so it cannot widen the page', () => {
+    const p = parsePost('2026-01-02-t.md', '---\ntitle: T\ndate: 2026-01-02\nsummary: S\n---\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n| c |\n| --- |\n| 3 |\n');
+    const html = renderPost(p);
+    expect(html.match(/<div class="post-table"><table>/g)).toHaveLength(2);
+    expect(html.match(/<\/table><\/div>/g)).toHaveLength(2);
   });
 });

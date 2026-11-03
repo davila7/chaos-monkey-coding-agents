@@ -42,7 +42,12 @@ export function loadPosts(): Post[] {
     .sort((a, b) => b.date.localeCompare(a.date) || a.slug.localeCompare(b.slug));
 }
 
-export const renderPost = (p: Post) => marked.parse(p.markdown, { async: false });
+/** Tables get a scroll container so a wide table scrolls inside the post instead of widening the page on phones. */
+export const renderPost = (p: Post) =>
+  marked
+    .parse(p.markdown, { async: false })
+    .replace(/<table>/g, '<div class="post-table"><table>')
+    .replace(/<\/table>/g, '</table></div>');
 
 export function formatDate(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
