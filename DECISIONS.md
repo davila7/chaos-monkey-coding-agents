@@ -1502,3 +1502,45 @@ Implemented 2026-11-01 (approved by the merge of PR #78), no model calls:
 - `cmca_analysis`: an applied fault with an `undelivered` record leaves `faults` (so it neither counts toward delivery nor excludes the trial) and goes to `Trial.undeliverable`; its call counts as eligible and as not faulted. `validity` reports `faults_undeliverable`, `by_fault_type` reports `undeliverable` per type, and the pilot summary reports `faults_undeliverable` per trial and profile.
 - `cmca_harbor.conformance report --not-applicable type:probe=reason` sets a probe's runs of that type aside from its class's cell and lists the scope under `call_gaps`, which the engine does not read (unlike `parity_gaps`). `capabilities/muse@1.4.14-R7309.1.json` is regenerated from the committed evidence with item 1's gaps and `probe-shell-fail` not applicable for `empty`, `trunc` and `poison`: parity set all six types (V-29). The capabilities page lists `call_gaps` with the parity gaps.
 - The board note on `muse-spark` rows comes with the first Muse results, since no Muse row exists yet; the analysis field it reads is `faults_undeliverable`.
+
+## D-0049 Ask fx upstream for a tool result hook through an issue (plan)
+
+- Date: 2026-11-05
+- Status: Proposed. Merging the PR that carries this entry approves item 1: the owner posts the issue drafted in `docs/upstream/2026-11-05-fx-issue-tool-results.md` from his GitHub account. No code changes, no model calls, no spend.
+
+Context: on 2026-11-05 the owner asked to give the fx team the fork's design and evidence so they can review how CMCA runs Track N and add the hook. He first proposed a pull request from davila7/fxh, then chose an issue ("un issue me parece bien. Hagamos un plan y confirmemos que esta todo correcto para enviar el issue"). D-0040 item 4.3 requires the owner's explicit approval for any upstream issue or pull request.
+
+Facts checked on 2026-11-05 against upstream `main` at `ca2aa95` (read-only clone of `https://github.com/vercel-labs/fx`) and GitHub search:
+
+- `main` has no user setting for tool hooks. `PreToolUse` handlers are registered only in tests, the README has no hooks section, and `src/core/hooks/runtime.zig` asserts that `Runtime` has no `registerPostToolUse`. The same assertion exists at `v0.0.13`; fxh removed it.
+- vercel-labs/fx#309, "Expose configurable lifecycle hooks", opened 2026-08-22 by a maintainer (its branch is in the upstream repository, which only maintainers can push to, and its commits come from a vercel.com address), label `type: feature`, last commit 2026-08-25, no reviews. It exposes `PreToolUse` (`continue`, `rewrite`, `block`; fails closed), `Stop`, `PostTurnEnd` and `AttentionRequired` as argv process hooks with schema `1`, read only from `~/.fx/settings.json` (`docs/hooks.md` on its branch). It has no post-tool event.
+- On `main` and at `v0.0.13`, a `PreToolUse` `block` reaches the model as `tool_execution_failed` with the suggestion "Do not retry the same tool call unchanged. Adjust the request or use an allowed alternative." (`src/core/tooling/tool_result_errors.zig`, `preToolUseBlockedJson`). fxh's `fail` action returns the hook's message without it (fxh `lifecycle.zig`, `lifecycle_fail`), so a refused call reads like a tool error.
+- libfx `hooks` (0.0.14 and later) only observe (`sdk/semantic-observer-hooks.md`), and the libfx native backend does not turn on fx's built-in tools (`sdk/README.md`). libfx is not a route to test the CLI's built-in tools.
+- Calls with malformed arguments are blocked before hooks on `main` (`lifecycle.zig`, test "non-object function arguments are blocked before hooks with safe replay input"), as in fxh, where they never reached the injector (`reports/2026-10-21-fxh-n-pilot.md`).
+- `CONTRIBUTING.md`: outside contributors can propose a design in an issue first, and any prose a coding agent writes for an issue must follow the `technical-writer` skill in `.fx/skills/technical-writer/`. The only issue template is a bug report and there is no `config.yml`, so blank issues are allowed.
+- Search for `hook`, `PostToolUse`, `tool result replace` and `intercept tool` finds no issue that asks for a result hook. Related open pull requests: #309 (above) and #1088 (an external command answers permission prompts).
+- davila7/fxh is public. Its default branch is the untouched upstream `main`, so the draft links `FORK.md` on `cmca/v0.0.13` and the diff as davila7/fxh#1.
+- The draft's Mermaid diagram renders without errors with mermaid 10.9.1 and 11.4.1 (local headless render).
+
+Decision:
+
+1. **One issue in vercel-labs/fx**, title "Let a hook replace a tool result before the model sees it", body as drafted. The owner posts it; this session has no access to vercel-labs/fx.
+2. **Scope.** The issue asks for a `PostToolUse` event that can replace a result and mark it failed, and a `PreToolUse` `fail` response, both on top of #309 and in its schema `1`. It proposes a payload and responses, lists the rules fxh needed (the event runs for calls that ran and failed; `failed` makes a failure in fx's standard shape; a replacement drops the stored output handle), and offers a pull request against `main` if the maintainers want one.
+3. **Evidence only from committed artifacts:** V-22 (fx 0.0.13 has no interception point), V-27 (stub model: requests unchanged without hooks, both events on every built-in tool, six fault types 3 of 3), `FORK.md` and davila7/fxh#1, plus the upstream source listed above. The text follows the `technical-writer` skill: sentence-case headings, no em dashes, none of its listed filler words.
+4. **Left out of the issue:** benchmark scores, the results site, Vercel AI Gateway behavior and terms (V-08, V-17), cost, and the other problems in the owner's summary for Vercel. The terms question stays in the owner's direct conversation with Vercel. The other problems can become separate issues if the owner asks.
+5. **After posting:** the issue URL goes into this entry's progress, and fxh `FORK.md` ("Upstream") links it in a commit on `cmca/v0.0.13`. That commit does not change the released `v0.0.13-h1` binary or its pin.
+6. **No upstream pull request** until the maintainers answer. A pull request would be a port onto `main` (Zig 0.17) in #309's schema, planned in its own entry.
+
+Alternatives considered:
+
+- A pull request from `cmca/v0.0.13`: it does not apply to `main` (Zig 0.16 against 0.17, the hook runtime changed since 0.0.13), it carries fork-only files (`FORK.md`, the release workflow, the renamed package), and it uses Claude Code's settings shape instead of #309's.
+- A comment on #309: it reaches that pull request's author directly, but a post-tool event is outside its scope. The issue mentions #309, which links it on that pull request's timeline.
+- One issue with every problem from the summary for Vercel: it mixes unrelated topics and would put the terms question in public.
+
+Risks:
+
+- The `runtime.zig` assertion suggests that the missing post-tool event is deliberate, so the maintainers may decline. fxh stays CMCA's route for Track N either way.
+- #309 has had no commits since 2026-08-25, so its schema may change before it merges.
+- The issue is public and permanent once posted.
+
+Consequences: no code, model calls or spend. fx Track N results keep coming from fxh.
