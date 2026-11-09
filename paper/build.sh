@@ -11,4 +11,4 @@ latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 if grep -E "Undefined control sequence|Citation .* undefined|Reference .* undefined" main.log; then
   exit 1
 fi
-tar -czf arxiv.tar.gz main.tex main.bbl sections generated
+tar -czf arxiv.tar.gz main.tex main.bbl sections figures generated
