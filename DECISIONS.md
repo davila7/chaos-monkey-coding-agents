@@ -1537,3 +1537,10 @@ Alternatives considered:
 - A NeurIPS-style template now: arXiv takes any layout; the venue template is applied when a venue is chosen.
 
 Consequences: the paper becomes a versioned artifact whose result numbers regenerate from a release, so a later release (M6, Muse) updates the paper by rerunning the generator. Work after approval: the generator and its test, the LaTeX sources, the CI job, V-19, `CITATION.cff`, `DATASHEET.md`, and the dataset card.
+
+Progress 2026-11-09 (approved by the merge of PR #83), no model calls:
+
+- V-19 closed (`docs/verification/V-19.md`): every work SPEC 3.2 names was found and read. Two SPEC 3.2 descriptions were wrong and are corrected: Harness-Bench injects no faults and has no scored robustness dimension in v2; AgentCE-Bench injects no tool failures. The differentiation claim is worded "we found no work", dated 2026-11-09.
+- `python -m cmca_analysis paper --release <dir> --out <dir>` writes `numbers.tex` (one macro per value) and one table per board; snapshot test on `results/2026-10-31-m5-codex`.
+- `paper/`: `main.tex`, sections, `refs.bib` (arXiv metadata from the arXiv API), `build.sh` (generator, latexmk, check for undefined macros, citations and references, arXiv tarball). Results stay behind `\ifcmcaresults`, off until M6. Workflow `paper.yml` builds it on changes to `paper/`, `cmca_analysis` or `results/`.
+- `CITATION.cff`, `DATASHEET.md`, and the Hugging Face dataset card draft `paper/hf-dataset-card.md`.
