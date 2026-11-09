@@ -1519,9 +1519,10 @@ Decision:
 5. **Citation and data.** Add `CITATION.cff` and `DATASHEET.md` (both in SPEC 15.1 and missing). Prepare, without uploading, the Hugging Face dataset card and file list (tasks with canary strings, fault catalog, profiles, aggregated release data; no raw trajectories until reviewed).
 6. **Owner-only steps.** The owner creates the arXiv account, gets the endorsement, submits, indexes the Hugging Face paper page, uploads the dataset, connects Zenodo, and pushes the tag `pre-m5-2026-10-19`. The thread provides paste-ready text and a checklist; nothing is submitted from the repo or the session.
 
-Open owner decisions (asked in the project thread; the draft proceeds on the recommended option):
+Results scope (owner decision 2026-11-09): the paper is submitted with M6 results, not the M5 pilot. Until M6 exists, the draft covers everything that does not depend on it (introduction, fault model, design, metrics, implementation, threats to validity) and the generator from item 2 is built and tested on `results/2026-10-31-m5-codex`; the results sections stay empty and are filled by rerunning the generator on the M6 release. M6 still needs its own plan and an approved budget.
 
-- Results scope: the M5 release with codex (recommended, presented as a benchmark with pilot results and its power analysis) or wait for M6.
+Open owner decisions (asked in the project thread):
+
 - `fx-claude` rows: Vercel's Acceptable Use Policy restricts publishing benchmarks of its AI services on non-Enterprise plans (V-17). Keep, remove, or wait for written permission.
 - Author line and affiliation.
 - `muse-spark`: out of v1 unless its main run finishes before submission.
