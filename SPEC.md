@@ -71,13 +71,13 @@ Headline question: **when tools fail, which harness still finishes the task, wha
 Fault injection for agents is an active area. The project MUST cite and position against at least:
 
 - **ReliabilityBench**: chaos-engineering-style fault injection; compares agent reasoning strategies, not production harnesses.
-- **ToolMaze, AgentNoiseBench, ToolMisuseBench, PlanBench-XL, AgentCE-Bench**: inject tool noise or failures into model-centric agent loops.
+- **ToolMaze, AgentNoiseBench, ToolMisuseBench, PlanBench-XL**: inject tool noise or failures into model-centric agent loops. AgentCE-Bench, listed here before V-19, injects no tool failures (decoy candidates only) and is not a fault-injection work (D-0050).
 - **AgentChaosBench**: fault injection aimed at diagnosing and localizing faults from telemetry (diagnosability, not recovery).
-- **Harness-Bench**: measures harness effects across models, including a robustness dimension, with recovery behavior native to each harness. `[VERIFY V-19]` Confirm whether it injects a controlled fault schedule inside harness tool layers before claiming novelty.
+- **Harness-Bench**: measures harness effects across models with production harnesses (Claude Code, Codex, OpenCode and others). It labels recovery after errors that occur naturally in trajectories and injects no faults; v2 has no scored robustness dimension (V-19).
 - **AgentBreak, agentfuzz, AgentCheck, chaos-agents, agent-chaos, Saboteur**: developer tools that inject faults into agent code, the LLM API, or the MCP layer. None targets unmodified production coding-agent harnesses with a shared fault schedule (to confirm in V-19).
 - **ChaosMonkey MCP**: an MCP server that gives coding agents chaos tools to find crashes in local projects. The agent is the tester there, not the subject.
 
-Differentiation claim (subject to V-19): CMCA injects one seeded fault model inside unmodified production harnesses, at both the MCP layer and the harnesses' own built-in tool layer, and compares harnesses under a fixed model.
+Differentiation claim (V-19, closed 2026-11-09, worded as "we found no work", not "first"): CMCA injects one seeded fault model inside unmodified production harnesses, at both the MCP layer and the harnesses' own built-in tool layer, and compares harnesses under a fixed model.
 
 ### 3.3 Naming
 
@@ -765,6 +765,7 @@ Flag any shell command or tool call within 10 steps after a fault event that mat
 | `SECURITY.md` | Vulnerability and safety-finding disclosure |
 | `CONTRIBUTING.md` | Contribution rules, including adding a new harness adapter |
 | `DECISIONS.md` | Architecture decision log maintained during implementation |
+| `paper/` | LaTeX source of the paper; result numbers generated from a release by `python -m cmca_analysis paper` (D-0050) |
 
 Quickstart shape (exact commands confirmed during M7):
 
