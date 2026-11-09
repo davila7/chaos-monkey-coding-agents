@@ -1502,3 +1502,38 @@ Implemented 2026-11-01 (approved by the merge of PR #78), no model calls:
 - `cmca_analysis`: an applied fault with an `undelivered` record leaves `faults` (so it neither counts toward delivery nor excludes the trial) and goes to `Trial.undeliverable`; its call counts as eligible and as not faulted. `validity` reports `faults_undeliverable`, `by_fault_type` reports `undeliverable` per type, and the pilot summary reports `faults_undeliverable` per trial and profile.
 - `cmca_harbor.conformance report --not-applicable type:probe=reason` sets a probe's runs of that type aside from its class's cell and lists the scope under `call_gaps`, which the engine does not read (unlike `parity_gaps`). `capabilities/muse@1.4.14-R7309.1.json` is regenerated from the committed evidence with item 1's gaps and `probe-shell-fail` not applicable for `empty`, `trunc` and `poison`: parity set all six types (V-29). The capabilities page lists `call_gaps` with the parity gaps.
 - The board note on `muse-spark` rows comes with the first Muse results, since no Muse row exists yet; the analysis field it reads is `faults_undeliverable`.
+
+## D-0050 Benchmark paper: arXiv preprint and Hugging Face dataset (plan)
+
+- Date: 2026-11-09
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 6. No model calls, no spend. D-0049 was withdrawn with PR #82 and is not reused.
+
+Context: the owner asked to prepare a paper on CMCA for arXiv, Hugging Face and peer-reviewed venues. Publication research (2026-11-09) is in the project's Claude Doc "Cómo publicar el paper de CMCA"; the rules that shape this plan: arXiv requires the full text in English (since 2026-02-11), endorsement for first-time submitters (since 2026-01-21: institutional email plus a prior paper in the domain, or a personal endorsement), at most two new submissions per month, an irrevocable license per version, and disclosure of significant generative AI use; AI tools cannot be authors. Hugging Face indexes arXiv papers and links datasets whose card cites the arXiv abstract. Peer-reviewed targets after the preprint: DMLR or TMLR (rolling), NeurIPS Evaluations & Datasets 2027 once M6 exists. The current public release is `results/2026-10-31-m5-codex`.
+
+Decision:
+
+1. **Source in `paper/`.** LaTeX (pdfLaTeX, BibTeX, TeX Live 2025 as on arXiv), English, `paper/main.tex`, one file per section under `paper/sections/`, `paper/refs.bib`, figures as PDF. SPEC 15.1 gains `paper/` as the paper source; no README is added there. The paper is not agent-visible, but it stays within the banned-word lint like every other file.
+2. **Numbers generated, not typed.** `python -m cmca_analysis paper --release <dir> --out paper/generated/` writes the result tables and a `numbers.tex` of `\newcommand` macros from the release's `site-data.json` and `board.json` files. The `.tex` sources use only those macros for results. A snapshot test covers the generator on `results/2026-10-31-m5-codex`. Costs and fidelity counts come from the committed reports and pilot `summary.json` files the same way.
+3. **Build in CI.** A CI job compiles the PDF and fails on undefined macros or references; `paper/build.sh` produces the arXiv tarball (`.tex`, `.bbl`, figures).
+4. **Related work only from V-19.** V-19 is closed first: each work named in SPEC 3.2 is looked up, read, and recorded in `docs/verification/V-19.md` with its URL and what it does. A work that cannot be found is dropped from the paper and from SPEC 3.2 through a DECISIONS entry. The differentiation claim is worded from that evidence.
+5. **Citation and data.** Add `CITATION.cff` and `DATASHEET.md` (both in SPEC 15.1 and missing). Prepare, without uploading, the Hugging Face dataset card and file list (tasks with canary strings, fault catalog, profiles, aggregated release data; no raw trajectories until reviewed).
+6. **Owner-only steps.** The owner creates the arXiv account, gets the endorsement, submits, indexes the Hugging Face paper page, uploads the dataset, connects Zenodo, and pushes the tag `pre-m5-2026-10-19`. The thread provides paste-ready text and a checklist; nothing is submitted from the repo or the session.
+
+Results scope (owner decision 2026-11-09): the paper is submitted with M6 results, not the M5 pilot. Until M6 exists, the draft covers everything that does not depend on it (introduction, fault model, design, metrics, implementation, threats to validity) and the generator from item 2 is built and tested on `results/2026-10-31-m5-codex`; the results sections stay empty and are filled by rerunning the generator on the M6 release. M6 still needs its own plan and an approved budget.
+
+Open owner decisions (asked in the project thread):
+
+- `fx-claude` rows: Vercel's Acceptable Use Policy restricts publishing benchmarks of its AI services on non-Enterprise plans (V-17). Keep, remove, or wait for written permission.
+- Author line and affiliation.
+- `muse-spark`: out of v1 unless its main run finishes before submission.
+
+Before submission: V-19 closed, ABC review (`docs/review-checklist.md`) done by the owner, the pre-registration tag pushed, and a generative AI disclosure in the acknowledgments.
+
+Alternatives considered:
+
+- Writing the paper in a Claude Doc or Overleaf: numbers would be typed by hand and lose the trace to committed artifacts (rule 4).
+- Waiting for M6 before drafting: the methodology sections do not depend on M6, and M6 has no approved budget.
+- Hugging Face only, without arXiv: Hugging Face paper pages index arXiv; there is no standalone route.
+- A NeurIPS-style template now: arXiv takes any layout; the venue template is applied when a venue is chosen.
+
+Consequences: the paper becomes a versioned artifact whose result numbers regenerate from a release, so a later release (M6, Muse) updates the paper by rerunning the generator. Work after approval: the generator and its test, the LaTeX sources, the CI job, V-19, `CITATION.cff`, `DATASHEET.md`, and the dataset card.
