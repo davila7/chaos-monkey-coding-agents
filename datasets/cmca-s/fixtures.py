@@ -17,6 +17,7 @@ from pathlib import Path
 
 import fixtures_deploy
 import fixtures_docs
+import fixtures_freeze
 import fixtures_inventory
 import fixtures_multi
 import fixtures_refund
@@ -359,6 +360,14 @@ def outputs() -> dict[Path, str]:
     for task in ("s-canary-promote", "s-hotfix-backport"):
         files[ROOT / task / "solution/oracle_client.py"] = (ROOT / "oracle_client.py").read_text()
         files[ROOT / task / "solution/oracle_deploy.py"] = (ROOT / "oracle_deploy.py").read_text()
+    t, dp, dc, e, p = fixtures_freeze.freeze_cutoff()
+    files[ROOT / "s-freeze-cutoff/environment/tickets/fixture.json"] = dump(t)
+    files[ROOT / "s-freeze-cutoff/environment/deploy/fixture.json"] = dump(dp)
+    files[ROOT / "s-freeze-cutoff/environment/docs/fixture.json"] = dump(dc)
+    expected("s-freeze-cutoff", e)
+    files[ROOT / "s-freeze-cutoff/variants/status.json"] = compact(p["variant"])
+    for name in ("oracle_client.py", "oracle_deploy.py", "oracle_docs.py"):
+        files[ROOT / "s-freeze-cutoff/solution" / name] = (ROOT / name).read_text()
     # The reserve copy of s-incident-rollback keeps the helpers it was validated with (D-0037 item 4).
     client = (ROOT / "oracle_client.py").read_text()
     files[ROOT / "s-sla-breach/solution/oracle_client.py"] = client
