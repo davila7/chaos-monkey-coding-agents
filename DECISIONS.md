@@ -1580,3 +1580,35 @@ Alternatives considered:
 - Drop `fx-claude` and `fxh-claude` to save the Vercel cost: the owner's direction is to keep fx rows.
 
 Consequences: M6 has ten configs on two tracks. No money is spent until the task suite is complete, and then only the gate with the owner's go. Option B needs one new Anthropic credit from the owner before its second half, and about $134 on Vercel.
+
+## D-0052 M6 in stages: n = 3 with degradation curves, funded stage by stage (plan)
+
+- Date: 2026-11-10
+- Status: Proposed. The owner directed on 2026-11-10 in the project thread that M6 run so the paper can be submitted, and asked to run it in stages with the money already in the accounts, reporting after each stage before asking for more ("podemos ir por etapas ... me vayas pidiendo que vaya cargando un poco más"). Merging the PR that carries this entry approves the design and the stage order and replaces D-0051 item 5. Each stage still starts only after the owner's go on its estimate.
+
+Context: D-0051 item 5 recommended n = 2 without curve profiles. The M5 power analysis (`reports/2026-10-20-m5-pilot.md` section 5) puts the between-task variance at 0 for all 9 pairs and observed differences at most 0.111, so no affordable design separates every pair; the paper's distinctive result is the degradation curve per config (profiles `clean`, `light`, `moderate`, `heavy`), which D-0051 left out. Billing on 2026-11-10 (owner screenshots in the thread): Anthropic promotional credit $159.85 of $200, expiring 2026-11-14 00:00 UTC; Anthropic purchased balance $35.75 with auto-reload; Vercel credit $37.37. The 14 D-0043 batch 1 tasks are on `main` (PR #67), validated with `oracle` and `nop`, not calibrated.
+
+Decision:
+
+1. **M6 design** (replaces D-0051 item 5): 40 tasks per track; leaderboard profiles `clean` and `moderate` at n = 3 (2,400 trials); curve profiles `light` and `heavy` on 20 tasks per track (stratified by category) at n = 2 (800 trials); the ten configs of D-0051 item 2. Estimate with 10% reruns and M5 per-trial means (D-0051 item 5): about $670 Anthropic and $275 Vercel including stage 1a. Curve n = 2 instead of SPEC 20's 3 is a recorded deviation.
+2. **Stages.** Each stage has its own cap, ends with a report to the owner (outcomes, delivery, observed cost per trial, problems), and the next stage starts only after the owner's go and, when needed, a top-up of the stated amount.
+
+| Stage | Scope | Trials | Anthropic | Vercel | Paid from |
+|---|---|---|---|---|---|
+| 1a | Calibration of the 14 batch 1 tasks (`cc-claude`, `clean`, 5 attempts, D-0036 rule) and the SPEC 20 cost gate (5 batch 1 tasks per track, seeded draw, `clean` and `moderate`, 1 attempt, ten configs) | 170 | $38 (cap $50) | $8 (cap $10) | promotional credit, Vercel credit |
+| 1b | Track S leaderboard on the active Track S tasks that pass calibration (up to 19), five configs, `clean` and `moderate`, n = 3 | up to 570 | $72 | $27 | promotional credit, Vercel credit |
+| 2 | Track N leaderboard on the active Track N tasks, after the codex delivery plan (D-0051 item 3) | up to 570 | $155 | $68 | owner top-up |
+| 3 | Leaderboard on the 21 new tasks per track (D-0043 batches 2 to 4, written without spend meanwhile) | 1,260 | $250 | $105 | owner top-up |
+| 4 | Curve profiles `light` and `heavy` | 800 | $158 | $67 | owner top-up |
+
+3. **Pre-registration before stage 1b.** `METHODOLOGY.md`, the profile files and the analysis package version are frozen with the M6 tag, pushed by the owner, before the first M6 trial. Tasks added in stage 3 and injector changes from the codex plan are listed as deviations in the release notes with their dates. Stage 1a trials are not M6 data.
+4. **Stop rules per stage:** infra failures above 3% of trials, fault delivery below 99% on any config, or observed cost per trial more than 25% above the estimate stops the stage and goes to the owner.
+5. **Unchanged from D-0051:** the holdout location (owner) and the codex Track N delivery plan.
+
+Alternatives considered:
+
+- One full run after a single gate: the owner asked for stages so a failure shows before most of the money is spent.
+- n = 2 without curves (D-0051 recommendation, about $476 in total): no degradation curve in the paper.
+- SPEC 20 in full (n = 5, curves at n = 3, about $1,486): at 40 tasks the extra attempts separate one more pair at most.
+
+Consequences: Track S results can exist before Track N and before all 40 tasks; boards are published only after stage 4, from one release. SPEC 20's v1.0 line is updated to this design with the pre-registration.
