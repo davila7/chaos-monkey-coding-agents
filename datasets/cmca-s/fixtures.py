@@ -19,6 +19,7 @@ import fixtures_deploy
 import fixtures_docs
 import fixtures_inventory
 import fixtures_multi
+import fixtures_refund
 import fixtures_sla
 import fixtures_warranty
 
@@ -353,6 +354,7 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-warranty-returns/solution/oracle_client.py"] = client
     files[ROOT / "s-warranty-returns/solution/oracle_inventory.py"] = (ROOT / "oracle_inventory.py").read_text()
     files.update(fixtures_docs.batch1_outputs(ROOT, CANARY, client))
+    files.update(fixtures_refund.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
