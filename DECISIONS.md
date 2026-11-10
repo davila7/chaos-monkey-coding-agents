@@ -1580,3 +1580,28 @@ Alternatives considered:
 - Drop `fx-claude` and `fxh-claude` to save the Vercel cost: the owner's direction is to keep fx rows.
 
 Consequences: M6 has ten configs on two tracks. No money is spent until the task suite is complete, and then only the gate with the owner's go. Option B needs one new Anthropic credit from the owner before its second half, and about $134 on Vercel.
+
+## D-0052 M6 design: n = 3 with degradation curves; calibration and cost gate before the promotional credit expires (plan)
+
+- Date: 2026-11-10
+- Status: Proposed. The owner directed on 2026-11-10 in the project thread that M6 run as recommended so the paper can be submitted ("Cuánto dinero necesitas para que M6 se ejecute y podamos presentar el Paper"), and stated the budget source. Merging the PR that carries this entry records that approval and replaces D-0051 item 5.
+
+Context: D-0051 item 5 left the M6 design to the owner and recommended n = 2 without curve profiles. The M5 power analysis (`reports/2026-10-20-m5-pilot.md` section 5) puts the between-task variance at 0 for all 9 pairs: attempt noise explains the spread, and observed differences were at most 0.111. No affordable design separates every pair, so the paper's distinctive result is the degradation curve per config (SPEC 9, profiles `clean`, `light`, `moderate`, `heavy`), which D-0051 left out. Billing on 2026-11-10 (owner screenshots in the thread): Anthropic promotional credit $159.85 of $200, expiring 2026-11-14 00:00 UTC; Anthropic purchased balance $35.75 with auto-reload; Vercel credit $37.37. The 14 D-0043 batch 1 tasks are on `main` (PR #67) and have passed `oracle` and `nop`, with no calibration yet.
+
+Decision:
+
+1. **M6 design** (replaces D-0051 item 5): 40 tasks per track; leaderboard profiles `clean` and `moderate` at n = 3 (2,400 trials); curve profiles `light` and `heavy` on 20 tasks per track (stratified by category, SPEC 9) at n = 2 (800 trials). Ten configs from D-0051 item 2. 3,200 trials. Estimate with the 10% rerun allowance and M5 per-trial means (D-0051 item 5): leaderboard $474 Anthropic and $200 Vercel, curves $158 and $67. Curve n = 2 instead of SPEC 20's 3 is a recorded deviation.
+2. **Before 2026-11-14, on the batch 1 tasks**, in a session of the cloud environment with the Anthropic key:
+   - Calibration (SPEC 10.4 step 7, D-0036 rule): `cc-claude`, `clean`, 5 attempts on each of the 14 tasks, 70 trials, estimate $20.
+   - Cost gate (SPEC 20): 5 batch 1 tasks per track, drawn by seeded draw, under `clean` and `moderate`, 1 attempt, on all ten configs, 100 trials, estimate $18 Anthropic and $8 Vercel.
+   - Caps: $50 Anthropic, $10 Vercel. Promotional credit pays the Anthropic part. These trials are not M6 data; they set the projection and the task gate.
+3. **Budget.** Total M6 estimate including items 1 and 2: about $670 Anthropic and $275 Vercel. After the promotional credit, the owner tops up about $600 Anthropic and $240 Vercel before the main run. If the gate projects more than 10% above this, the owner is told before any main-run block starts. Runs proceed in capped blocks so the spend never exceeds the funded balance.
+4. **Unchanged from D-0051:** batches 2 to 4 of D-0043 (21 tasks per track), the codex Track N delivery plan, the holdout location, and the pre-registration tag before the main run.
+
+Alternatives considered:
+
+- n = 2 without curves (D-0051 recommendation, about $476 in total): no degradation curve in the paper.
+- SPEC 20 in full (n = 5, curves at n = 3, about $1,486): the extra attempts do not change which pairs separate at 40 tasks (one pair at 10 points).
+- Letting the promotional credit expire unused: the calibration and the gate are needed anyway.
+
+Consequences: SPEC 20's v1.0 line is updated to this design when the pre-registration is frozen. The owner funds the main run after the gate.
