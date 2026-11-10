@@ -1612,3 +1612,7 @@ Alternatives considered:
 - SPEC 20 in full (n = 5, curves at n = 3, about $1,486): at 40 tasks the extra attempts separate one more pair at most.
 
 Consequences: Track S results can exist before Track N and before all 40 tasks; boards are published only after stage 4, from one release. SPEC 20's v1.0 line is updated to this design with the pre-registration.
+
+Progress:
+
+- Stage 1a (2026-11-10): 180 trials, Anthropic $28.24 of the $50 cap, Vercel $8.31 of the $10 cap, 2 infrastructure failures (1.1%) rerun once, verifiable fault delivery 105 of 105 in the gate. Report `reports/2026-11-10-m6-stage1a.md`. Calibration: `s-webhook-signature` misses the floor and `n-plugin-registry` and `n-semver-ranges` the lower bound; the other 11 batch 1 tasks pass, so stage 1b runs 18 Track S tasks. Gate cost per task, profile and attempt is 26% under the D-0051 estimate on Anthropic and 1% over on Vercel; stage 1b projects $63.87 Anthropic and $33.56 Vercel, so the Vercel credit (about $29.06 left) needs a top-up before stage 1b. `METHODOLOGY.md` and SPEC 20 are updated for M6 and frozen by the `pre-m6-2026-11-10` tag.
