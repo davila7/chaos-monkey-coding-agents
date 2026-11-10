@@ -1301,6 +1301,13 @@ Alternatives considered:
 
 Consequences: four task PRs follow this entry. None of them claims a calibration result. M6 still needs the budget decision and, with it, the cost gate on the new tasks.
 
+Progress 2026-11-10, batch 2 (no model calls). Batch 1 merged with PR #67. Batch 2 adds 14 tasks, each validated with `python -m cmca_harbor.validate` (oracle 1 under `clean` and, on Track S, under every profile; `nop` 0), with shortcut attempts that score 0, evidence under `results/task-validation/2026-11-10-d43-<task>/`:
+
+- Track N: `n-ballot-tally` and `n-sensor-hourly` (data transformation), `n-layercfg-fix` (bug fix), `n-cmake-build` (build or config repair), `n-undo-journal` (small feature), `n-rounding-rules` (refactor), `n-scheduled-jobs` (investigation).
+- Track S: `s-refund-settlement` and `s-access-offboard` (multi-service), `s-oncall-routing` and `s-outage-incidents` (support triage), `s-transit-close` (inventory reconciliation), `s-dock-api-migration` (docs lookup plus a code change), `s-freeze-cutoff` (release operations).
+- Active tasks after batch 2: 26 per track. Remaining for 40: Track N bug fix 3, small feature 2, build 3, investigation 2, refactor 2, data transformation 2; Track S support triage 2, inventory 2, docs 3, release 3, multi-service 4.
+- Notes for review: `s-refund-settlement` needs 233 eligible calls under `clean` (the largest Track S oracle; the cost gate will show its trial cost). The root `.gitignore` rule `jobs/` matched a package directory of `n-scheduled-jobs`, which is committed with `git add -f`. None of the 14 is calibrated; calibration runs in D-0052 stage 1a.
+
 ## D-0044 Codex CLI with Claude on Tracks S and N (plan)
 
 - Date: 2026-10-29
