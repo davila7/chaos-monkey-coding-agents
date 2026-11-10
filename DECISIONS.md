@@ -1612,3 +1612,25 @@ Alternatives considered:
 - SPEC 20 in full (n = 5, curves at n = 3, about $1,486): at 40 tasks the extra attempts separate one more pair at most.
 
 Consequences: Track S results can exist before Track N and before all 40 tasks; boards are published only after stage 4, from one release. SPEC 20's v1.0 line is updated to this design with the pre-registration.
+
+## D-0053 Codex: post-phase faults on commands that outlive their yield (plan)
+
+- Date: 2026-11-10
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 4. No model calls; item 3 uses the stub from V-02 at no cost.
+
+Context: D-0051 item 3. `codex-claude` delivered 87 of 88 verifiable faults on Track N in the D-0045 run, below the 99% bar (`reports/2026-10-31-codex-claude.md`). The miss is an `empty` fault on a command still running when `exec_command` returned after its yield. V-02 (addendum 2026-10-31) shows that Codex 0.163.0 fires no hook when `exec_command` returns with the process running; the model sees Codex's frame with `Process running with session ID <n>` and the output so far. `PostToolUse` fires later, on the `write_stdin` poll during which the process ends, with only the last chunk of output, and its replacement takes the place of that `write_stdin` result. A process that never ends during a poll fires no `PostToolUse`. No hook can change what the model saw when `exec_command` returned.
+
+Decision:
+
+1. **`injector-codex`.** On `PostToolUse` for a call with a pending post-phase decision, the injector reads the rollout (as `transcriptLookup` already does) for that call's `exec_command` output. If that output carries the running frame, the call passes unchanged and the injector logs `decision: "undelivered"`, reason `outlived-yield`, through `tt-decide --undelivered` (D-0048). The late replacement is not applied, because it would land on a `write_stdin` result whose real text the model expects.
+2. **Analysis.** `cmca_analysis` marks an applied post-phase fault on a Codex `exec_command` call as undeliverable, reason `outlived-yield`, when the call's output in the trajectory carries the running frame and no `undelivered` record exists (the process never ended, so no hook fired). Both paths use the D-0048 fields: the fault leaves delivery, the call counts as eligible and not faulted, and `faults_undeliverable` is reported per config.
+3. **Verification ($0).** Rerun `V-02/script-yield.json` with a post-phase decision forced on the long command, once with the process ending during the poll and once with it outliving the trial; record the log records and what the stub saw in `docs/verification/V-02.md`. Unit tests in `injector-codex` and a fixture test in `cmca_analysis`.
+4. **Capabilities.** `capabilities/codex@0.163.0.json` gains a `call_gaps` entry `shell (outlived yield)` for `empty`, `trunc` and `poison`, as Muse's `shell (exit != 0)`. M5 and D-0045 results are not recomputed (D-0042 item 4).
+
+Alternatives considered:
+
+- Raise `yield_time_ms` or rewrite the call so commands finish before Codex returns: mutates tool arguments (CLAUDE.md rule 12) and changes how Codex runs.
+- Turn off Codex's unified exec in the config so every command blocks until it ends: changes the harness as shipped, and its behavior under the pinned version is unverified.
+- Apply the replacement on the late `write_stdin` result: the model would get harness text in place of a later output chunk after already seeing real partial output, which is neither the fault type nor what a real failure looks like.
+
+Consequences: Codex's Track N delivery is computed over deliverable calls, with the outlived-yield count reported next to it, so the fidelity bar can be met without hiding the gap. Codex gets slightly fewer delivered post-phase shell faults than harnesses whose commands always finish before returning.
