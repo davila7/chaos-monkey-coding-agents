@@ -1545,3 +1545,38 @@ Progress 2026-11-09 (approved by the merge of PR #83), no model calls:
 - `paper/`: `main.tex`, sections, `refs.bib` (arXiv metadata from the arXiv API), `build.sh` (generator, latexmk, check for undefined macros, citations and references, arXiv tarball). Results stay behind `\ifcmcaresults`, off until M6. Workflow `paper.yml` builds it on changes to `paper/`, `cmca_analysis` or `results/`.
 - `CITATION.cff`, `DATASHEET.md`, and the Hugging Face dataset card draft `paper/hf-dataset-card.md`.
 - 2026-11-09, owner request in the project thread: Figure 1 directly after the abstract (owner correction: standard paper order is title, abstract, figure, introduction), a TikZ diagram of the fault-injection flow (`paper/figures/overview.tex`, `float` and `tikz` packages; the CI workflow installs `texlive-pictures`).
+
+## D-0051 Muse Spark out of M6 for now; M6 with the remaining configs (plan)
+
+- Date: 2026-11-10
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 4 and the M6 design the owner picks in item 5. It approves no model calls: the cost gate (item 6) and each run block wait for the owner's go on their estimate.
+
+Context: the owner decided on 2026-11-10 to continue without Muse Spark for now, with the other harnesses only. The `muse-spark` main run (D-0048) is paused since 2026-11-01 on a Meta billing error (HTTP 402; draft PR #80). M6 is the next milestone and the paper is submitted with M6 results (D-0050). The M6 sizes in D-0042 item 5 ($550, $916, $1,306) were never chosen because each is above the owner's ceiling of $200 per Anthropic credit. Of the current credit, D-0044 used $40.04 (`reports/2026-10-31-codex-claude.md`), so about $160 remains; Muse is billed by Meta and `fx`/`fxh` by the Vercel AI Gateway, outside that credit. The main branch has 12 tasks per track; PR #67 (D-0043 batch 1) adds 7 per track and is open.
+
+Decision:
+
+1. **Muse out of M6 and the paper v1.** `muse-spark` is not in the M6 pre-registration and has no rows on the board or in the paper. Nothing is deleted: `configs/muse-spark.yaml`, `injector-muse`, the D-0048 analysis fields, the capability file `capabilities/muse@1.4.14-R7309.1.json` and its entry on the capabilities page (a conformance fact, not a result) stay. Draft PR #80 stays open and paused. Muse comes back only through a new entry, as an add-on board like `codex-claude`, once Meta billing works.
+2. **M6 configs.** Track S: `cc-claude`, `fx-claude`, `pi-claude`, `opencode-claude`, `codex-claude`. Track N: `cc-claude`, `fxh-claude`, `pi-claude`, `opencode-claude`, `codex-claude`. Ten configs. `codex-gpt` and `agy-gemini` stay out. `fx-claude` rows are not hidden; the Vercel publication question (V-17) stays the owner's (D-0050 open decisions).
+3. **Codex delivery on Track N.** `codex-claude` missed the 99% fidelity bar on Track N (87 of 88): Codex fires `PostToolUse` for a command still running when `exec_command` returns only when the process ends on a later `write_stdin` poll, or never (V-02 addendum, 2026-10-31). Before the pre-registration, a separate plan entry proposes the injector change or a declared gap, with its conformance cost. M6 does not start with that miss open.
+4. **Task suite before any spend** (D-0043): PR #67 reviewed and merged, batches 2 to 4 (21 tasks per track, 42 in total) written and validated with `oracle` and `nop` only, the holdout location decided by the owner (default proposal: a private repository). No model calls.
+5. **M6 design (owner's choice).** 40 tasks per track, profiles `clean` and `moderate`, no curve profiles in this release (a deviation from SPEC 20, recorded in the release notes). Mean harness-reported cost per trial from M5 (D-0042 item 5) and, for `codex-claude`, from `results/pilot/2026-10-30-codex-{s,n}/summary.json` ($0.154 on S, $0.317 on N, list prices from the bridge usage logs). Per task, profile and attempt across both tracks: $1.794 Anthropic (8 configs) and $0.759 Vercel (`fx-claude` $0.218, `fxh-claude` $0.541). With the 10% rerun allowance, and assuming the new tasks cost what the M5 tasks cost (not measured; the gate measures it):
+
+| Option | n | Trials | Anthropic | Vercel | Anthropic credits of $200 |
+|---|---|---|---|---|---|
+| A | 1 | 800 | $158 | $67 | the rest of the current one, with nothing left for the gate: does not fit |
+| B | 2 | 1,600 | $316 | $134 | the rest of the current one plus one new credit |
+| C | 3 | 2,400 | $474 | $200 | the rest of the current one plus two new credits |
+| D (SPEC 20) | 5 | 4,000 | $789 | $334 | the rest of the current one plus four new credits |
+
+   Recommendation: B. n = 2 gives 80 trials per config and board cell (M5 had 36), a within-config variance estimate that n = 1 does not, and it fits in two credits. It will not separate every pair of configs; the M5 report (section 5) puts that at 57 tasks and n = 5. The run is split into blocks of one track, attempt and config (the largest, Track N `cc-claude` per attempt, is about $29), each with a spend cap, so no credit goes above $200; a new credit is used only after the owner says it is in place.
+6. **Cost gate** (SPEC 20), after item 4 and before the pre-registration tag: 5 new tasks per config under `clean` and `moderate`, 100 trials, estimate $18 Anthropic and $8 Vercel, cap $25 Anthropic and $10 Vercel. It goes to the owner with the projected total for the chosen option before the full run. If the projection no longer fits the chosen option, the owner picks again.
+7. **Sequence:** items 3 and 4, gate, pre-registration tag (pushed by the owner), run blocks, analysis, release `results/YYYY-MM-DD-m6`, site and paper regenerated from it.
+
+Alternatives considered:
+
+- Keep Muse in M6 and wait for Meta billing: blocks M6 and the paper on a third party with no date.
+- Remove the Muse files and capability entry: the owner said "for now", and CLAUDE.md rule 2 forbids deletions without an explicit request.
+- Run M6 on the 12 or 19 tasks that exist: repeats M5 with little new information and misses SPEC 19 M6 (40 plus 40 tasks).
+- Drop `fx-claude` and `fxh-claude` to save the Vercel cost: the owner's direction is to keep fx rows.
+
+Consequences: M6 has ten configs on two tracks. No money is spent until the task suite is complete, and then only the gate with the owner's go. Option B needs one new Anthropic credit from the owner before its second half, and about $134 on Vercel.
