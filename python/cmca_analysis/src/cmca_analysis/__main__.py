@@ -1,10 +1,10 @@
-"""`python -m cmca_analysis analyze ...` (release boards), `trials ...` (one run's summary) or `paper ...` (LaTeX numbers)."""
+"""`python -m cmca_analysis analyze ...` (release boards), `trials ...` (one run's summary) `paper ...` (LaTeX numbers) or `hf ...` (Hugging Face tables)."""
 
 import sys
 
-from . import analyze, paper, trials
+from . import analyze, hf, paper, trials
 
-COMMANDS = {"analyze": analyze.main, "paper": paper.main, "trials": trials.main}
+COMMANDS = {"analyze": analyze.main, "hf": hf.main, "paper": paper.main, "trials": trials.main}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
