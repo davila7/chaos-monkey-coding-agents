@@ -119,6 +119,27 @@ class Fault:
     undelivered_reason: str | None = None
 
 
+# Codex's frame on an `exec_command` result returned after its yield with the
+# process still running (V-02 addendum 2026-10-31).
+CODEX_RUNNING = re.compile(r"\AChunk ID: [^\n]*\nWall time: [^\n]*\nProcess running with session ID \d+\n")
+OUTLIVED_YIELD = "outlived-yield"
+_SHELL_POST = {"empty", "trunc", "poison"}
+
+
+def outlived_yield(e: dict[str, Any], observation: str | None) -> bool:
+    """An applied post-phase shell fault on a Codex command that was still running when
+    `exec_command` returned: the model saw real output first, and if the process never ended
+    during a poll no hook fired to log it as undelivered (D-0053)."""
+    return (
+        e.get("decision") == "apply"
+        and str(e.get("harness") or "").startswith("codex@")
+        and e.get("capability") == "shell"
+        and e.get("type") in _SHELL_POST
+        and observation is not None
+        and bool(CODEX_RUNNING.search(observation))
+    )
+
+
 def undelivered_seqs(events: list[dict[str, Any]]) -> dict[int, str]:
     """`of_seq` to reason, for the applied faults logged as undelivered."""
     return {
@@ -392,6 +413,9 @@ def load_trial(
     messages, calls = trajectory_steps(read_json(trial / "agent/trajectory.json"))
     undelivered = undelivered_seqs(events)
     pairs = join([e for e in events if e.get("decision") != UNDELIVERED], calls)
+    for e, c in pairs:
+        if isinstance(e.get("seq"), int) and e["seq"] not in undelivered and outlived_yield(e, c.observation if c else None):
+            undelivered[e["seq"]] = OUTLIVED_YIELD
     for e, c in pairs:
         if c is not None:
             c.capability = e.get("capability")

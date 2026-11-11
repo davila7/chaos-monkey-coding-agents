@@ -36,6 +36,8 @@ export const Capabilities = z.object({
   parity_set: z.array(z.string()),
   parity_gaps: z.array(z.object({ type: z.string(), capability: z.string(), reason: z.string() })),
   // Gaps on a kind of call within a class, which the engine still faults (D-0048).
+  // `probe` is a conformance probe set aside from a cell, or a verification
+  // script (`V-xx/...`) for a gap no probe covers (D-0053).
   call_gaps: z
     .array(z.object({ type: z.string(), capability: z.string(), probe: z.string(), reason: z.string() }))
     .default([]),
@@ -103,3 +105,5 @@ export function grid(caps: Capabilities[], c: Capabilities) {
   );
   return { classes, types, cells };
 }
+
+export const VERIFICATION_REF = /^V-\d+\//;

@@ -1629,7 +1629,7 @@ Progress:
 ## D-0053 Codex: post-phase faults on commands that outlive their yield (plan)
 
 - Date: 2026-11-10
-- Status: Proposed. Merging the PR that carries this entry approves items 1 to 4. No model calls; item 3 uses the stub from V-02 at no cost.
+- Status: Accepted (PR #88 merged 2026-11-11). Implemented 2026-11-11: items 1 to 4 done; V-02 addendum 2026-11-11 records item 3. No model calls.
 
 Context: D-0051 item 3. `codex-claude` delivered 87 of 88 verifiable faults on Track N in the D-0045 run, below the 99% bar (`reports/2026-10-31-codex-claude.md`). The miss is an `empty` fault on a command still running when `exec_command` returned after its yield. V-02 (addendum 2026-10-31) shows that Codex 0.163.0 fires no hook when `exec_command` returns with the process running; the model sees Codex's frame with `Process running with session ID <n>` and the output so far. `PostToolUse` fires later, on the `write_stdin` poll during which the process ends, with only the last chunk of output, and its replacement takes the place of that `write_stdin` result. A process that never ends during a poll fires no `PostToolUse`. No hook can change what the model saw when `exec_command` returned.
 

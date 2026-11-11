@@ -22,7 +22,20 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .ingest import CATALOG_PATH, ELIGIBLE, LOG_NAMES, UNDELIVERED, TaskDecl, pair, read_status, task_decls, undelivered_seqs, unlogged
+from .ingest import (
+    CATALOG_PATH,
+    ELIGIBLE,
+    LOG_NAMES,
+    OUTLIVED_YIELD,
+    UNDELIVERED,
+    TaskDecl,
+    outlived_yield,
+    pair,
+    read_status,
+    task_decls,
+    undelivered_seqs,
+    unlogged,
+)
 from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
 from .reconcile import delivered
 
@@ -89,6 +102,9 @@ def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]
     undelivered = undelivered_seqs(events)
     joined_calls = _join([e for e in events if e.get("decision") != UNDELIVERED], tool_calls(_json(trial / "agent/trajectory.json")))
     joined = [(e, c[1] if c else None) for e, c in joined_calls]
+    for e, obs in joined:
+        if isinstance(e.get("seq"), int) and e["seq"] not in undelivered and outlived_yield(e, obs):
+            undelivered[e["seq"]] = OUTLIVED_YIELD
     decl = decls.get(task, TaskDecl())
     token = decl.token
     faults = []

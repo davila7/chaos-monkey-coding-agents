@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { SiteNav } from '@/components/SiteNav';
-import { type Cell, grid, loadCapabilities } from '@/lib/capabilities';
+import { type Cell, VERIFICATION_REF, grid, loadCapabilities } from '@/lib/capabilities';
 import { REPO, SPEC } from '@/lib/links';
 
 export const metadata: Metadata = { title: 'Capabilities | Chaos Monkey for Coding Agents' };
@@ -141,13 +141,20 @@ export default function CapabilitiesPage() {
                         {p.type} on {p.capability}
                       </code>
                       : {p.reason}
-                      {p.probe && (
-                        <>
-                          {' '}
-                          Runs of <code>{p.probe}</code> are left out of the cell; the fault stays in trials and analysis
-                          counts each one that could not reach the model.
-                        </>
-                      )}
+                      {p.probe &&
+                        (VERIFICATION_REF.test(p.probe) ? (
+                          <>
+                            {' '}
+                            Shown with <code>{p.probe}</code>; the fault stays in trials and analysis counts each one
+                            that could not reach the model.
+                          </>
+                        ) : (
+                          <>
+                            {' '}
+                            Runs of <code>{p.probe}</code> are left out of the cell; the fault stays in trials and
+                            analysis counts each one that could not reach the model.
+                          </>
+                        ))}
                     </li>
                   ))}
                 </ul>

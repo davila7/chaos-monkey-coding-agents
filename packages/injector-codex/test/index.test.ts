@@ -13,6 +13,7 @@ import {
   shellText,
   tokenCount,
   transcriptLookup,
+  yieldedLookup,
   type CallEvent,
   type Finished,
   type Run,
@@ -73,7 +74,9 @@ function setup(profile: { weights?: Record<string, number>; targeted?: Record<st
   const pending = filePending(join(dir, 'state', 'pending'));
   const finished = new Map<string, Finished>();
   const lookup = (_: string, id: string) => finished.get(id) ?? null;
-  return { dir, env, log: env.TT_LOG, finished, go: (e: CallEvent) => handle(e, run, pending, lookup) };
+  const yielded = new Set<string>();
+  const go = (e: CallEvent) => handle(e, run, pending, lookup, (_, id) => yielded.has(id));
+  return { dir, env, log: env.TT_LOG, finished, yielded, go };
 }
 
 const PATCH_EDIT = '*** Begin Patch\n*** Update File: conf/db.conf\n@@\n-port = 5432\n+port = 5433\n*** End Patch\n';
@@ -128,6 +131,27 @@ describe('shell text', () => {
     expect(transcriptLookup(path, 'call_1')).toEqual({ exitCode: 3, seconds: 1.5 });
     expect(transcriptLookup(path, 'call_9')).toBeNull();
     expect(transcriptLookup(join(dir, 'missing'), 'call_1')).toBeNull();
+  });
+
+  it('finds an exec_command result that returned with the process running', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-'));
+    const path = join(dir, 'rollout.jsonl');
+    // Record shape from the V-02 rerun (docs/verification/V-02/2026-11-11-yield-tt-result.txt).
+    const out = (id: string, output: string) =>
+      JSON.stringify({ type: 'response_item', payload: { type: 'function_call_output', call_id: id, output } });
+    writeFileSync(
+      path,
+      [
+        out('call_0', 'Chunk ID: aaaaaa\nWall time: 0.0100 seconds\nProcess exited with code 0\nOriginal token count: 1\nOutput:\nok\n'),
+        out('call_1', 'Chunk ID: bbbbbb\nWall time: 1.0006 seconds\nProcess running with session ID 67443\nOriginal token count: 2\nOutput:\nearly\n'),
+        out('call_2', 'Chunk ID: cccccc\nWall time: 0.0100 seconds\nProcess exited with code 0\nOriginal token count: 9\nOutput:\nx\nProcess running with session ID 1\n'),
+      ].join('\n'),
+    );
+    expect(yieldedLookup(path, 'call_1')).toBe(true);
+    expect(yieldedLookup(path, 'call_0')).toBe(false);
+    expect(yieldedLookup(path, 'call_2')).toBe(false);
+    expect(yieldedLookup(path, 'call_9')).toBe(false);
+    expect(yieldedLookup(join(dir, 'missing'), 'call_1')).toBe(false);
   });
 });
 
@@ -186,6 +210,25 @@ describe('handle with the real engine', () => {
     await h.go(big);
     h.finished.set('call_2', { exitCode: 0, seconds: 0 });
     expect(await h.go(post(big, 'x'.repeat(40_004)))).toBeNull();
+  });
+
+  it('logs a post-phase fault as undelivered when the command outlived its yield', async () => {
+    const h = setup({ weights: { empty: 1 } });
+    const e = pre('Bash', { command: 'sleep 4; echo late' });
+    await h.go(e);
+    h.finished.set('call_1', { exitCode: 0, seconds: 4 });
+    h.yielded.add('call_1');
+    expect(await h.go(post(e, 'late\n'))).toBeNull();
+    const [applied, undelivered] = readFileSync(h.log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(applied).toMatchObject({ decision: 'apply', type: 'empty', tool_name: 'Bash' });
+    expect(undelivered).toMatchObject({
+      decision: 'undelivered',
+      type: 'empty',
+      tool_name: 'Bash',
+      capability: 'shell',
+      of_seq: applied.seq,
+      reason: 'outlived-yield',
+    });
   });
 
   it('leaves unfaulted calls alone and never faults exempt paths', async () => {

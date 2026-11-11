@@ -20,6 +20,7 @@ export type Answer = { refuse: string } | { output: string } | null;
 interface PostRef {
   type: string;
   payload_id: string;
+  seq?: number;
   poison_index?: number;
   drift_index?: number;
 }
@@ -44,6 +45,8 @@ export interface Finished {
   seconds: number;
 }
 export type Lookup = (transcript: string, callId: string) => Finished | null;
+/** Whether the model already saw a command's output with the process still running. */
+export type Yielded = (transcript: string, callId: string) => boolean;
 
 const TT_DECIDE = process.env.TT_DECIDE ?? '/opt/tt/bin/tt-decide.cjs';
 
@@ -106,6 +109,36 @@ export const transcriptLookup: Lookup = (transcript, callId) => {
   return null;
 };
 
+// The frame Codex puts on an `exec_command` result that returns after its
+// yield with the process still running (V-02 addendum 2026-10-31).
+const RUNNING = /^Chunk ID: [^\n]*\nWall time: [^\n]*\nProcess running with session ID \d+\n/;
+
+/**
+ * A finished command's output is written to the rollout after PostToolUse
+ * runs, so a `function_call_output` already there for the call is the result
+ * `exec_command` returned with the process running (V-02, D-0053).
+ */
+export const yieldedLookup: Yielded = (transcript, callId) => {
+  let text: string;
+  try {
+    text = readFileSync(transcript, 'utf8');
+  } catch {
+    return false;
+  }
+  for (const line of text.split('\n')) {
+    if (!line.includes(callId) || !line.includes('"function_call_output"')) continue;
+    try {
+      const p = (JSON.parse(line) as { payload?: Record<string, unknown> }).payload;
+      if (p?.type === 'function_call_output' && p.call_id === callId && typeof p.output === 'string' && RUNNING.test(p.output)) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return false;
+};
+
 const PATCH_FILE = /^\*\*\* (Add|Update|Delete) File: (.+)$/gm;
 
 function patchFiles(input: Record<string, unknown>): { op: string; path: string }[] {
@@ -162,6 +195,10 @@ export function shellText(callId: string, f: Finished, output: string): string {
 
 const PATCH_RESULT = /^(Exit code: (\d+)\nWall time: [^\n]*\nOutput:\n)([\s\S]*)$/;
 
+async function undelivered(run: Run, post: PostRef, reason: string): Promise<void> {
+  await run(['--undelivered'], JSON.stringify({ post, tool_name: 'Bash', capability: 'shell', reason }));
+}
+
 async function decide(run: Run, payload: unknown): Promise<Decision> {
   return JSON.parse(await run([], JSON.stringify(payload))) as Decision;
 }
@@ -175,10 +212,18 @@ async function applyPost(run: Run, post: PostRef, output: string): Promise<strin
  * run, then replace the text the model sees (`empty`, `trunc`, `poison`) or
  * turn a patch result into a failure (`falsefail`, which the catalog has for
  * fs.write and fs.edit only), keeping the frame Codex puts around a command
- * or patch result. Every error passes the call through
- * unchanged.
+ * or patch result. A command that outlived its yield showed the model real
+ * output before this PostToolUse, which lands on a later `write_stdin`
+ * result, so it passes unchanged and its fault is logged as undelivered
+ * (D-0053). Every error passes the call through unchanged.
  */
-export async function handle(e: CallEvent, run: Run, pending: Pending, lookup: Lookup = transcriptLookup): Promise<Answer> {
+export async function handle(
+  e: CallEvent,
+  run: Run,
+  pending: Pending,
+  lookup: Lookup = transcriptLookup,
+  yielded: Yielded = yieldedLookup,
+): Promise<Answer> {
   try {
     const input = e.tool_input ?? {};
     if (e.hook_event_name === 'PreToolUse') {
@@ -201,7 +246,12 @@ export async function handle(e: CallEvent, run: Run, pending: Pending, lookup: L
     const response = e.tool_response;
 
     if (e.tool_name === 'Bash') {
-      if (tokenCount(response) > OUTPUT_TOKEN_LIMIT || !e.transcript_path) return null;
+      if (!e.transcript_path) return null;
+      if (d.post && yielded(e.transcript_path, e.tool_use_id)) {
+        await undelivered(run, d.post, 'outlived-yield');
+        return null;
+      }
+      if (tokenCount(response) > OUTPUT_TOKEN_LIMIT) return null;
       const f = lookup(e.transcript_path, e.tool_use_id);
       if (!f || !d.post) return null;
       return { output: shellText(e.tool_use_id, f, await applyPost(run, d.post, response)) };
