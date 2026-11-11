@@ -1552,6 +1552,7 @@ Progress 2026-11-09 (approved by the merge of PR #83), no model calls:
 - `paper/`: `main.tex`, sections, `refs.bib` (arXiv metadata from the arXiv API), `build.sh` (generator, latexmk, check for undefined macros, citations and references, arXiv tarball). Results stay behind `\ifcmcaresults`, off until M6. Workflow `paper.yml` builds it on changes to `paper/`, `cmca_analysis` or `results/`.
 - `CITATION.cff`, `DATASHEET.md`, and the Hugging Face dataset card draft `paper/hf-dataset-card.md`.
 - 2026-11-09, owner request in the project thread: Figure 1 directly after the abstract (owner correction: standard paper order is title, abstract, figure, introduction), a TikZ diagram of the fault-injection flow (`paper/figures/overview.tex`, `float` and `tikz` packages; the CI workflow installs `texlive-pictures`).
+- 2026-11-11, owner request in the project thread (item 5): the owner keeps a private Hugging Face dataset repository as a backup until the paper; the holdout never goes there. `python -m cmca_analysis hf --release <dir>` writes `<release>/hf/tasks.jsonl` and `trials.jsonl` (one row per task and per trial, from the same ingest and classification as `analyze`) so the Hub's Dataset Viewer and `load_dataset` work; JSON Lines instead of Parquet keeps the package free of new dependencies. Committed now for `2026-10-31-m5-codex` (38 tasks, 659 trials, 14 excluded); regenerated for M6. `tests/test_hf.py` checks the tables against the site counts. The card draft `paper/hf-dataset-card.md` declares both tables.
 
 ## D-0051 Muse Spark out of M6 for now; M6 with the remaining configs (plan)
 
@@ -1619,6 +1620,11 @@ Alternatives considered:
 - SPEC 20 in full (n = 5, curves at n = 3, about $1,486): at 40 tasks the extra attempts separate one more pair at most.
 
 Consequences: Track S results can exist before Track N and before all 40 tasks; boards are published only after stage 4, from one release. SPEC 20's v1.0 line is updated to this design with the pre-registration.
+
+Progress:
+
+- Stage 1a (2026-11-10): 180 trials, Anthropic $28.24 of the $50 cap, Vercel $8.31 of the $10 cap, 2 infrastructure failures (1.1%) rerun once, verifiable fault delivery 105 of 105 in the gate. Report `reports/2026-11-10-m6-stage1a.md`. Calibration: `s-webhook-signature` misses the floor and `n-plugin-registry` and `n-semver-ranges` the lower bound; the other 11 batch 1 tasks pass, so stage 1b runs 18 Track S tasks. Gate cost per task, profile and attempt is 26% under the D-0051 estimate on Anthropic and 1% over on Vercel; stage 1b projects $63.87 Anthropic and $33.56 Vercel, so the Vercel credit (about $29.06 left) needs a top-up before stage 1b. `METHODOLOGY.md` and SPEC 20 are updated for M6; the owner freezes them by pushing the `pre-m6-2026-11-10` tag after this merges.
+- Stage 1b (2026-11-11): 540 Track S trials under tag `pre-m6-2026-11-10`, 2 infrastructure failures (0.4%) rerun once, 894 of 894 verifiable faults delivered, Anthropic $66.98 (gate projection $63.87, estimate $72), Vercel $26.09 (projection $33.56, estimate $27). No stop rule was hit. Report `reports/2026-11-11-m6-stage1b.md`, evidence `results/pilot/2026-11-11-m6-s/`.
 
 ## D-0053 Codex: post-phase faults on commands that outlive their yield (plan)
 
