@@ -1301,6 +1301,13 @@ Alternatives considered:
 
 Consequences: four task PRs follow this entry. None of them claims a calibration result. M6 still needs the budget decision and, with it, the cost gate on the new tasks.
 
+Progress 2026-11-10, batch 2 (no model calls). Batch 1 merged with PR #67. Batch 2 adds 14 tasks, each validated with `python -m cmca_harbor.validate` (oracle 1 under `clean` and, on Track S, under every profile; `nop` 0), with shortcut attempts that score 0, evidence under `results/task-validation/2026-11-10-d43-<task>/`:
+
+- Track N: `n-ballot-tally` and `n-sensor-hourly` (data transformation), `n-layercfg-fix` (bug fix), `n-cmake-build` (build or config repair), `n-undo-journal` (small feature), `n-rounding-rules` (refactor), `n-scheduled-jobs` (investigation).
+- Track S: `s-refund-settlement` and `s-access-offboard` (multi-service), `s-oncall-routing` and `s-outage-incidents` (support triage), `s-transit-close` (inventory reconciliation), `s-dock-api-migration` (docs lookup plus a code change), `s-freeze-cutoff` (release operations).
+- Active tasks after batch 2: 26 per track. Remaining for 40: Track N bug fix 3, small feature 2, build 3, investigation 2, refactor 2, data transformation 2; Track S support triage 2, inventory 2, docs 3, release 3, multi-service 4.
+- Notes for review: `s-refund-settlement` needs 233 eligible calls under `clean` (the largest Track S oracle; the cost gate will show its trial cost). The root `.gitignore` rule `jobs/` matched a package directory of `n-scheduled-jobs`, which is committed with `git add -f`. None of the 14 is calibrated; calibration runs in D-0052 stage 1a.
+
 ## D-0044 Codex CLI with Claude on Tracks S and N (plan)
 
 - Date: 2026-10-29
@@ -1618,3 +1625,25 @@ Progress:
 
 - Stage 1a (2026-11-10): 180 trials, Anthropic $28.24 of the $50 cap, Vercel $8.31 of the $10 cap, 2 infrastructure failures (1.1%) rerun once, verifiable fault delivery 105 of 105 in the gate. Report `reports/2026-11-10-m6-stage1a.md`. Calibration: `s-webhook-signature` misses the floor and `n-plugin-registry` and `n-semver-ranges` the lower bound; the other 11 batch 1 tasks pass, so stage 1b runs 18 Track S tasks. Gate cost per task, profile and attempt is 26% under the D-0051 estimate on Anthropic and 1% over on Vercel; stage 1b projects $63.87 Anthropic and $33.56 Vercel, so the Vercel credit (about $29.06 left) needs a top-up before stage 1b. `METHODOLOGY.md` and SPEC 20 are updated for M6; the owner freezes them by pushing the `pre-m6-2026-11-10` tag after this merges.
 - Stage 1b (2026-11-11): 540 Track S trials under tag `pre-m6-2026-11-10`, 2 infrastructure failures (0.4%) rerun once, 894 of 894 verifiable faults delivered, Anthropic $66.98 (gate projection $63.87, estimate $72), Vercel $26.09 (projection $33.56, estimate $27). No stop rule was hit. Report `reports/2026-11-11-m6-stage1b.md`, evidence `results/pilot/2026-11-11-m6-s/`.
+
+## D-0053 Codex: post-phase faults on commands that outlive their yield (plan)
+
+- Date: 2026-11-10
+- Status: Proposed. Merging the PR that carries this entry approves items 1 to 4. No model calls; item 3 uses the stub from V-02 at no cost.
+
+Context: D-0051 item 3. `codex-claude` delivered 87 of 88 verifiable faults on Track N in the D-0045 run, below the 99% bar (`reports/2026-10-31-codex-claude.md`). The miss is an `empty` fault on a command still running when `exec_command` returned after its yield. V-02 (addendum 2026-10-31) shows that Codex 0.163.0 fires no hook when `exec_command` returns with the process running; the model sees Codex's frame with `Process running with session ID <n>` and the output so far. `PostToolUse` fires later, on the `write_stdin` poll during which the process ends, with only the last chunk of output, and its replacement takes the place of that `write_stdin` result. A process that never ends during a poll fires no `PostToolUse`. No hook can change what the model saw when `exec_command` returned.
+
+Decision:
+
+1. **`injector-codex`.** On `PostToolUse` for a call with a pending post-phase decision, the injector reads the rollout (as `transcriptLookup` already does) for that call's `exec_command` output. If that output carries the running frame, the call passes unchanged and the injector logs `decision: "undelivered"`, reason `outlived-yield`, through `tt-decide --undelivered` (D-0048). The late replacement is not applied, because it would land on a `write_stdin` result whose real text the model expects.
+2. **Analysis.** `cmca_analysis` marks an applied post-phase fault on a Codex `exec_command` call as undeliverable, reason `outlived-yield`, when the call's output in the trajectory carries the running frame and no `undelivered` record exists (the process never ended, so no hook fired). Both paths use the D-0048 fields: the fault leaves delivery, the call counts as eligible and not faulted, and `faults_undeliverable` is reported per config.
+3. **Verification ($0).** Rerun `V-02/script-yield.json` with a post-phase decision forced on the long command, once with the process ending during the poll and once with it outliving the trial; record the log records and what the stub saw in `docs/verification/V-02.md`. Unit tests in `injector-codex` and a fixture test in `cmca_analysis`.
+4. **Capabilities.** `capabilities/codex@0.163.0.json` gains a `call_gaps` entry `shell (outlived yield)` for `empty`, `trunc` and `poison`, as Muse's `shell (exit != 0)`. M5 and D-0045 results are not recomputed (D-0042 item 4).
+
+Alternatives considered:
+
+- Raise `yield_time_ms` or rewrite the call so commands finish before Codex returns: mutates tool arguments (CLAUDE.md rule 12) and changes how Codex runs.
+- Turn off Codex's unified exec in the config so every command blocks until it ends: changes the harness as shipped, and its behavior under the pinned version is unverified.
+- Apply the replacement on the late `write_stdin` result: the model would get harness text in place of a later output chunk after already seeing real partial output, which is neither the fault type nor what a real failure looks like.
+
+Consequences: Codex's Track N delivery is computed over deliverable calls, with the outlived-yield count reported next to it, so the fidelity bar can be met without hiding the gap. Codex gets slightly fewer delivered post-phase shell faults than harnesses whose commands always finish before returning.

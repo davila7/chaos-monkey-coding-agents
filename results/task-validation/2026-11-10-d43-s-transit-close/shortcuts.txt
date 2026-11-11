@@ -1,0 +1,63 @@
+s-transit-close 1.0.0 shortcut attempts, 2026-11-10.
+Each attempt is solution/solve.py with one rule dropped (exact text replacements, each asserted to
+match once), run against tests/test.sh with the inventory service image tt-inventory:0.1.0 built from
+this repo (no gateway, so no faults), each step in its own container: the service with no network,
+the modified oracle in the python:3.12-slim image the task uses sharing the service's loopback, the
+verifier with no network. In every attempt a refused write is printed and skipped instead of ending
+the run, so the attempt reaches every line. No model calls. The unmodified oracle scored 1 in the
+same runner.
+
+oracle                   reward 1  ok
+case-of-twelve           reward 0  HK-4101@north: 294, expected 306
+stock-unit-ignored       reward 0  HK-4101@north: 288, expected 306
+local-time-as-utc        reward 0  HK-4105@east: 458, expected 428
+scans-after-cutoff       reward 0  HK-4105@east: 458, expected 428
+rescans-counted          reward 0  HK-4111@transit: 24, expected 72
+ordered-as-shipped       reward 0  transit-close.csv TO-7303|HK-4103: {'shipped': 40, 'received': 30, 'written_off': 10}, expected {'received': 30, 'shipped': 30, 'written_off': 0}
+unshipped-written-off    reward 0  transit-close.csv: missing lines [], unexpected lines ['TO-7309|HK-4102']
+overdue-by-created       reward 0  HK-4110@transit: 0, expected 20
+overdue-from-now         reward 0  HK-4110@transit: 0, expected 20
+no-reversal              reward 0  HK-4109@west: 253, expected 213
+trust-stale-listing      reward 0  HK-4106@east: 500, expected 452
+first-page-only          reward 0  HK-4109@transit: 40, expected 0
+
+case-of-twelve: every case converted as 12 each, ignoring the per-sku case rows; quantities rounded down to the stock unit.
+  replace: 'return packs[(sku, uom)] if (sku, uom) in packs else packs[("*", uom)]'
+  with:    'return 12 if uom == "case" else (packs[(sku, uom)] if (sku, uom) in packs else packs[("*", uom)])'
+  replace: '    if q.denominator != 1:\n        raise RuntimeError(f"{sku}: {qty} {uom} is not a whole number of {units[sku]}")\n'
+  with:    ''
+stock-unit-ignored: scans converted to each and posted as is, without dividing by the each count of the stock unit.
+  replace: 'Fraction(qty * each(sku, uom), each(sku, units[sku]))'
+  with:    'Fraction(qty * each(sku, uom), 1)'
+local-time-as-utc: the scan's local time compared with the cut-off as if it were UTC (offset dropped).
+  replace: 'if when(s["scanned_at"]) < CUTOFF:'
+  with:    'if when(s["scanned_at"][:19] + "Z") < CUTOFF:'
+scans-after-cutoff: every scan counted, including those at or after the cut-off.
+  replace: 'if when(s["scanned_at"]) < CUTOFF:'
+  with:    'if True:'
+rescans-counted: a pallet scanned twice counted twice.
+  replace: '    if s["scan_id"] in seen:\n        continue\n'
+  with:    ''
+ordered-as-shipped: shipped taken from the ordered quantity in transfer-orders.csv instead of the shipping posting.
+  replace: '    shipped = -sum(a["delta"] for a in out)\n'
+  with:    '    shipped = stock_units(sku, int(r["ordered"]), r["uom"])\n'
+unshipped-written-off: a line with no shipping posting treated as shipped in full on its creation date.
+  replace: '    if not out:\n        continue\n    shipped = -sum(a["delta"] for a in out)\n    shipped_at = min(when(a["at"]) for a in out)\n'
+  with:    '    if not out:\n        shipped, shipped_at = stock_units(sku, int(r["ordered"]), r["uom"]), when(r["created"] + "T00:00:00Z")\n    else:\n        shipped = -sum(a["delta"] for a in out)\n        shipped_at = min(when(a["at"]) for a in out)\n'
+overdue-by-created: the 7-day rule applied to the creation date instead of the shipping date.
+  replace: '    if shipped_at < OVERDUE_BEFORE:'
+  with:    '    if when(r["created"] + "T00:00:00Z") < OVERDUE_BEFORE:'
+overdue-from-now: 7 days counted back from the service clock (2026-09-14T09:00Z) instead of the cut-off.
+  replace: 'OVERDUE_BEFORE = datetime.fromisoformat("2026-09-06T00:00:00+00:00")'
+  with:    'OVERDUE_BEFORE = datetime.fromisoformat("2026-09-07T09:00:00+00:00")'
+no-reversal: receipts posted in excess (one scan posted twice) left as they are.
+  replace: '    elif got < booked:'
+  with:    '    elif False:'
+  replace: '        lost = shipped - got\n'
+  with:    '        lost = shipped - max(got, booked)\n'
+trust-stale-listing: the postings of TO-7311 taken from the poisoned listing (shipping legs only, no receipt), simulated by dropping the destination legs after the read.
+  replace: '    legs = inv.adjustments(sku=sku, reference=ref)\n'
+  with:    '    legs = inv.adjustments(sku=sku, reference=ref)\n    legs = [a for a in legs if not (ref == "TO-7311" and a["warehouse"] == dst)]\n'
+first-page-only: the first page of every listing only.
+  replace: 'units = {sku:'
+  with:    'inv.pages = lambda tool, args, stop=None: inv.c.call(tool, {**args, "page": 1}, expect="results")["results"]\nunits = {sku:'

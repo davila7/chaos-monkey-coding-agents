@@ -17,9 +17,16 @@ from pathlib import Path
 
 import fixtures_deploy
 import fixtures_docs
+import fixtures_freeze
 import fixtures_inventory
 import fixtures_multi
+import fixtures_refund
+import fixtures_offboarding
+import fixtures_routing
+import fixtures_quayline
+import fixtures_outage
 import fixtures_sla
+import fixtures_transit
 import fixtures_warranty
 
 ROOT = Path(__file__).resolve().parent
@@ -326,6 +333,14 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-lot-recall/variants/item.json"] = compact(p["variant"])
     files[ROOT / "s-lot-recall/solution/oracle_client.py"] = (ROOT / "oracle_client.py").read_text()
     files[ROOT / "s-lot-recall/solution/oracle_inventory.py"] = (ROOT / "oracle_inventory.py").read_text()
+    f, transfers, e, p = fixtures_transit.transit_close()
+    files[ROOT / "s-transit-close/environment/inventory/fixture.json"] = dump(f)
+    for name, text in transfers.items():
+        files[ROOT / "s-transit-close/environment/transfers" / name] = text
+    expected("s-transit-close", e)
+    files[ROOT / "s-transit-close/variants/adjustments.json"] = compact(p["variant"])
+    for helper in ("oracle_client.py", "oracle_inventory.py"):
+        files[ROOT / "s-transit-close/solution" / helper] = (ROOT / helper).read_text()
     t, i, e, p = fixtures_warranty.warranty_returns()
     files[ROOT / "s-warranty-returns/environment/tickets/fixture.json"] = dump(t)
     files[ROOT / "s-warranty-returns/environment/inventory/fixture.json"] = dump(i)
@@ -347,12 +362,31 @@ def outputs() -> dict[Path, str]:
     for task in ("s-canary-promote", "s-hotfix-backport"):
         files[ROOT / task / "solution/oracle_client.py"] = (ROOT / "oracle_client.py").read_text()
         files[ROOT / task / "solution/oracle_deploy.py"] = (ROOT / "oracle_deploy.py").read_text()
+    t, dp, dc, e, p = fixtures_freeze.freeze_cutoff()
+    files[ROOT / "s-freeze-cutoff/environment/tickets/fixture.json"] = dump(t)
+    files[ROOT / "s-freeze-cutoff/environment/deploy/fixture.json"] = dump(dp)
+    files[ROOT / "s-freeze-cutoff/environment/docs/fixture.json"] = dump(dc)
+    expected("s-freeze-cutoff", e)
+    files[ROOT / "s-freeze-cutoff/variants/status.json"] = compact(p["variant"])
+    for name in ("oracle_client.py", "oracle_deploy.py", "oracle_docs.py"):
+        files[ROOT / "s-freeze-cutoff/solution" / name] = (ROOT / name).read_text()
     # The reserve copy of s-incident-rollback keeps the helpers it was validated with (D-0037 item 4).
     client = (ROOT / "oracle_client.py").read_text()
     files[ROOT / "s-sla-breach/solution/oracle_client.py"] = client
     files[ROOT / "s-warranty-returns/solution/oracle_client.py"] = client
     files[ROOT / "s-warranty-returns/solution/oracle_inventory.py"] = (ROOT / "oracle_inventory.py").read_text()
     files.update(fixtures_docs.batch1_outputs(ROOT, CANARY, client))
+    files.update(fixtures_refund.outputs(ROOT, CANARY, client))
+    files.update(fixtures_offboarding.outputs(ROOT, CANARY, client))
+    t, dc, e, p = fixtures_routing.oncall_routing()
+    fixture("s-oncall-routing", t["tickets"])
+    files[ROOT / "s-oncall-routing/environment/docs/fixture.json"] = dump(dc)
+    expected("s-oncall-routing", e)
+    files[ROOT / "s-oncall-routing/variants/doc.json"] = fixtures_docs.dumps_variant(p["variant"])
+    files[ROOT / "s-oncall-routing/solution/oracle_client.py"] = client
+    files[ROOT / "s-oncall-routing/solution/oracle_docs.py"] = (ROOT / "oracle_docs.py").read_text()
+    files.update(fixtures_quayline.outputs(ROOT, client))
+    files.update(fixtures_outage.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
