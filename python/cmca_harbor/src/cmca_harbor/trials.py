@@ -192,6 +192,7 @@ EVIDENCE = (
     "artifacts/app/blocked.csv",
     "artifacts/app/STATUS.json",
     "artifacts/app/report.json",
+    "artifacts/app/transit-close.csv",
     "verifier/reward.txt",
     "verifier/STATUS.json",
     "verifier/check.txt",

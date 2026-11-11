@@ -66,8 +66,8 @@ count. When a candidate wins, the count of the contest stops.
 is counted with the candidates that are still continuing. Every ballot is
 read again from ranking 1 in every round.
 
-2.4 When a round starts with one continuing candidate, that candidate wins in
-that round.
+2.4 When a round with at least one active ballot starts with one continuing
+candidate, that candidate wins in that round.
 
 2.5 When round 1 has no active ballot (the contest has no records, or every
 record is exhausted), round 1 is still recorded, with every candidate at 0

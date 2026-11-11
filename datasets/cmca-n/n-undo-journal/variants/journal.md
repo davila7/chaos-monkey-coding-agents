@@ -15,8 +15,9 @@ Written by binkeep 2.x and by the scanners since firmware 4:
 
 - Keys in this order: `v`, `seq`, `op`, `by`, `sku`, then `target` for undo
   and redo lines (section 4), then `effects`.
-- `effects` lists every bin the line changed, in the order the changes were
-  made, with the quantity before and after. Bin codes are normalized.
+- `effects` lists every bin the line set, in the order the changes were
+  made, with the quantity before and after, also when the two are equal (a
+  count that finds the recorded quantity). Bin codes are normalized.
 - binkeep writes compact JSON (no spaces after `,` and `:`), non-ASCII
   characters as they are, one line per entry (`journal.dumps`).
 - `op` is `receive`, `issue`, `move`, `count` or `fix` for a stock
