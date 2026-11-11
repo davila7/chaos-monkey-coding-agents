@@ -27,6 +27,7 @@ import fixtures_routing
 import fixtures_quayline
 import fixtures_outage
 import fixtures_sla
+import fixtures_supplier
 import fixtures_transit
 import fixtures_warranty
 
@@ -389,6 +390,7 @@ def outputs() -> dict[Path, str]:
     files.update(fixtures_quayline.outputs(ROOT, client))
     files.update(fixtures_outage.outputs(ROOT, CANARY, client))
     files.update(fixtures_compat.outputs(ROOT, CANARY, client))
+    files.update(fixtures_supplier.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
