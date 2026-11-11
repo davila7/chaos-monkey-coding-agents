@@ -1,5 +1,9 @@
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { type Capabilities, grid, loadCapabilities } from '../src/lib/capabilities';
+import { type Capabilities, VERIFICATION_REF, grid, loadCapabilities } from '../src/lib/capabilities';
+
+const REPO = resolve(import.meta.dirname, '../../..');
 
 describe('committed capability files', () => {
   const caps = loadCapabilities();
@@ -19,9 +23,13 @@ describe('committed capability files', () => {
     }
   });
 
-  it('every call gap names a probe set aside from a cell of its type', () => {
+  it('every call gap names a probe set aside from a cell of its type, or a verification script', () => {
     for (const c of caps) {
       for (const p of c.call_gaps) {
+        if (VERIFICATION_REF.test(p.probe)) {
+          expect(existsSync(join(REPO, 'docs/verification', p.probe))).toBe(true);
+          continue;
+        }
         const sets = Object.values(c.faults[p.type]!.classes).flatMap((k) => (k.not_applicable ?? []).map((n) => n.probe));
         expect(sets).toContain(p.probe);
       }

@@ -1,7 +1,7 @@
 #!/bin/sh
 # One Codex session against stub.py, inside the container. MODE: none, block or deny.
-# UNTRUSTED=1 leaves out --dangerously-bypass-hook-trust (V-03). SCRIPT and MATCH override
-# the stub script and the hook matcher.
+# UNTRUSTED=1 leaves out --dangerously-bypass-hook-trust (V-03). SCRIPT, MATCH and HOOK override
+# the stub script, the hook matcher and the hook command.
 set -e
 trust=--dangerously-bypass-hook-trust
 [ -n "${UNTRUSTED:-}" ] && trust=
@@ -25,13 +25,13 @@ multi_agent = false
 matcher = "${MATCH:-^(Bash|apply_patch)\$}"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = "/work/hook.sh"
+command = "${HOOK:-/work/hook.sh}"
 timeout = 30
 [[hooks.PostToolUse]]
 matcher = "${MATCH:-^(Bash|apply_patch)\$}"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = "/work/hook.sh"
+command = "${HOOK:-/work/hook.sh}"
 timeout = 30
 T
 STUB_KEY=unused codex exec --dangerously-bypass-approvals-and-sandbox $trust --skip-git-repo-check \

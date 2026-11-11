@@ -230,3 +230,33 @@ def test_undelivered_faults_leave_delivery_and_exclusion(tmp_path: Path):
 
     s = summarize(ev, None)["profiles"]["moderate"]
     assert (s["faults_applied"], s["faults_undeliverable"], s["eligible_calls_min"]) == (0, 1, 2)
+
+
+def test_codex_command_that_outlived_its_yield_is_undeliverable(tmp_path: Path):
+    """D-0053: a post-phase shell fault on a Codex command still running when `exec_command`
+    returned leaves delivery, whether or not the injector logged it as undelivered."""
+    from cmca_analysis import ingest
+    from cmca_analysis.metrics import validity
+
+    running = "Chunk ID: e4574b\nWall time: 10.0010 seconds\nProcess running with session ID 24896\nOriginal token count: 2\nOutput:\nearly\n"
+    done = "Chunk ID: 6cb903\nWall time: 0.0000 seconds\nProcess exited with code 0\nOriginal token count: 0\nOutput:\n"
+    codex = lambda e: {**e, "harness": "codex@0.163.0"}  # noqa: E731
+    ev = tmp_path / "evidence"
+    logged = codex({**_event(None, "Bash", "shell", "undelivered", "trunc", "trunc.half"), "of_seq": 1, "reason": "outlived-yield"})
+    _trial(ev, "codex-claude-moderate-a0", "t1__y", "t1", "moderate", 0,
+           [("exec_command", running), ("exec_command", running), ("exec_command", done)],
+           [codex(_event(0, "Bash", "shell", "apply", "empty", "empty.blank")),
+            codex(_event(1, "Bash", "shell", "apply", "trunc", "trunc.half")), logged,
+            codex(_event(2, "Bash", "shell", "apply", "empty", "empty.blank"))], 1.0, 0.1, "success")
+    path = ev / "codex-claude-moderate-a0/t1__y"
+
+    t = ingest.load_trial(path, ev, {})
+    assert [(f.type, f.undelivered_reason) for f in t.undeliverable] == [("empty", "outlived-yield"), ("trunc", "outlived-yield")]
+    assert [f.type for f in t.faults] == ["empty"]
+    assert [c.decision for c in t.calls] == ["undelivered", "undelivered", "apply"]
+    assert not t.excluded
+    v = validity([t])
+    assert (v["faults_applied"], v["faults_undeliverable"]) == (1, 2)
+
+    s = summarize(ev, None)["profiles"]["moderate"]
+    assert (s["faults_applied"], s["faults_undeliverable"], s["delivered"]) == (1, 2, 1)
