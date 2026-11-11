@@ -32,6 +32,7 @@ import fixtures_penwick
 import fixtures_outage
 import fixtures_sla
 import fixtures_supplier
+import fixtures_taxonomy
 import fixtures_transit
 import fixtures_warranty
 
@@ -399,6 +400,7 @@ def outputs() -> dict[Path, str]:
     files.update(fixtures_meridale.outputs(ROOT, client))
     files.update(fixtures_kits.outputs(ROOT, CANARY, client))
     files.update(fixtures_audit.outputs(ROOT, CANARY, client))
+    files.update(fixtures_taxonomy.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
