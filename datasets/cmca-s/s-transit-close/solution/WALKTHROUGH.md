@@ -49,7 +49,7 @@ Every number above comes from `fixtures_transit.py` and the expected file it wri
 
 ## Verifier
 
-`tests/test.sh` reads the inventory service state and `/app/transit-close.csv`. It fails when the stock of any item in any warehouse differs from the expected stock (zero and a missing entry are equal); when the net postings per TO, sku and warehouse for the TOs in the export differ from the expected ones (so a quantity posted under the wrong TO fails); when any applied write is not `adjust_stock` under a TO in the export with reason `transfer`, or `damage` from `transit` with a negative delta; and when the report's lines or any of its three values differ (a repeated line fails).
+`tests/test.sh` reads the inventory service state and `/app/transit-close.csv`. It fails when the stock of any item in any warehouse differs from the expected stock (zero and a missing entry are equal); when the net postings per TO, sku and warehouse for the TOs in the export differ from the expected ones (so a quantity posted under the wrong TO fails); when the `damage` write-offs per TO and sku differ from the report's expected `written_off` (so a write-off posted as a `transfer` fails); when any applied write is not `adjust_stock` under a TO in the export with reason `transfer`, or `damage` from `transit` with a negative delta; and when the report's lines or any of its three values differ (a repeated line fails).
 
 ## Shortcut attempts
 
