@@ -260,3 +260,6 @@ def test_codex_command_that_outlived_its_yield_is_undeliverable(tmp_path: Path):
 
     s = summarize(ev, None)["profiles"]["moderate"]
     assert (s["faults_applied"], s["faults_undeliverable"], s["delivered"]) == (1, 2, 1)
+    echoed = done.replace("Output:\n", "Output:\nProcess running with session ID 3\n")
+    assert not ingest.outlived_yield(codex(_event(0, "Bash", "shell", "apply", "empty")), echoed)
+    assert ingest.outlived_yield(codex(_event(0, "Bash", "shell", "apply", "empty")), running)

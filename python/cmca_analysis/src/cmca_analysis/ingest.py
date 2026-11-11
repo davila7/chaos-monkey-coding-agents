@@ -121,7 +121,7 @@ class Fault:
 
 # Codex's frame on an `exec_command` result returned after its yield with the
 # process still running (V-02 addendum 2026-10-31).
-CODEX_RUNNING = re.compile(r"\nProcess running with session ID \d+\n")
+CODEX_RUNNING = re.compile(r"\AChunk ID: [^\n]*\nWall time: [^\n]*\nProcess running with session ID \d+\n")
 OUTLIVED_YIELD = "outlived-yield"
 _SHELL_POST = {"empty", "trunc", "poison"}
 

@@ -144,7 +144,7 @@ describe('shell text', () => {
       [
         out('call_0', 'Chunk ID: aaaaaa\nWall time: 0.0100 seconds\nProcess exited with code 0\nOriginal token count: 1\nOutput:\nok\n'),
         out('call_1', 'Chunk ID: bbbbbb\nWall time: 1.0006 seconds\nProcess running with session ID 67443\nOriginal token count: 2\nOutput:\nearly\n'),
-        out('call_2', 'Process running with session ID 1 is what the output said'),
+        out('call_2', 'Chunk ID: cccccc\nWall time: 0.0100 seconds\nProcess exited with code 0\nOriginal token count: 9\nOutput:\nx\nProcess running with session ID 1\n'),
       ].join('\n'),
     );
     expect(yieldedLookup(path, 'call_1')).toBe(true);

@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, statSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type Capabilities, VERIFICATION_REF, grid, loadCapabilities } from '../src/lib/capabilities';
 
@@ -27,7 +27,10 @@ describe('committed capability files', () => {
     for (const c of caps) {
       for (const p of c.call_gaps) {
         if (VERIFICATION_REF.test(p.probe)) {
-          expect(existsSync(join(REPO, 'docs/verification', p.probe))).toBe(true);
+          const root = join(REPO, 'docs/verification');
+          const path = resolve(root, p.probe);
+          expect(path.startsWith(root + sep)).toBe(true);
+          expect(existsSync(path) && statSync(path).isFile()).toBe(true);
           continue;
         }
         const sets = Object.values(c.faults[p.type]!.classes).flatMap((k) => (k.not_applicable ?? []).map((n) => n.probe));

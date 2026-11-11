@@ -111,7 +111,7 @@ export const transcriptLookup: Lookup = (transcript, callId) => {
 
 // The frame Codex puts on an `exec_command` result that returns after its
 // yield with the process still running (V-02 addendum 2026-10-31).
-const RUNNING = /\nProcess running with session ID \d+\n/;
+const RUNNING = /^Chunk ID: [^\n]*\nWall time: [^\n]*\nProcess running with session ID \d+\n/;
 
 /**
  * A finished command's output is written to the rollout after PostToolUse

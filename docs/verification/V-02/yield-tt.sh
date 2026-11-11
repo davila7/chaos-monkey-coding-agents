@@ -8,7 +8,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../.." && pwd)
 for run in yield outlive quick; do
-  rm -rf "$OUT/$run" && mkdir -p "$OUT/$run"
+  rm -rf "${OUT:?OUT must be set}/$run" && mkdir -p "$OUT/$run"
   docker run --rm --network none -e SCRIPT=/work/script-$run.json -e HOOK=/work/hook-tt.sh \
     -v "$here:/work:ro" -v "$OUT/$run:/out" -v "$root/packages/injector-codex/dist/tt:/opt/tt:ro" \
     -v "$root/configs/codex-claude.catalog.json:/catalog.json:ro" "$IMAGE" sh /work/session.sh
