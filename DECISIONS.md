@@ -1648,3 +1648,31 @@ Alternatives considered:
 - Apply the replacement on the late `write_stdin` result: the model would get harness text in place of a later output chunk after already seeing real partial output, which is neither the fault type nor what a real failure looks like.
 
 Consequences: Codex's Track N delivery is computed over deliverable calls, with the outlived-yield count reported next to it, so the fidelity bar can be met without hiding the gap. Codex gets slightly fewer delivered post-phase shell faults than harnesses whose commands always finish before returning.
+
+## D-0054 Claude Code: post-phase faults on outputs saved to a file (plan)
+
+- Date: 2026-11-12
+- Status: Proposed.
+
+Context: D-0052 stage 2 stopped on fault delivery: `cc-claude` delivered 90 of 91 verifiable Track N faults (98.9%), below the 99% bar (`reports/2026-11-12-m6-stage2.md`). The stage 2 evidence shows two different causes.
+
+- **Persisted outputs (a real gap).** Claude Code 2.1.289 saves a `Bash` output over about 30 KB to `tool-results/<id>.txt` in the session folder before the `tool.call` hook gets the result. The record the hook gets carries `persistedOutputPath` and `persistedOutputSize`. The model then sees a `<persisted-output>` block with the size, the path and a 2 KB preview built from `stdout`. The injector replaced `stdout` only, so an `empty` fault blanked the preview while the block still named a 35,639-byte file holding the real output (`n-ledger-fix`, `moderate` attempt 0, and its delivery rerun; `n-csv-export`, `moderate` attempt 1). 35 `cc-claude` trials in stage 2 show at least one persisted output; no other harness does.
+- **`empty` on a failed command (an analysis artifact).** In `n-split-reports` (`moderate` attempt 2), the model saw exactly `Exit code 1` (`raw_tool_result` in the trajectory), which is the D-0042 delivery of `empty` on a command that exited non-zero. Harbor renders the injected record as `Exit code 1\n\n[stdout]\nExit code 1\n[metadata] ...`, and the `empty` check in `cmca_analysis.reconcile` reads that rendering, so it marked the fault undelivered. The stage 2 report gave this as a second cause; it is not one.
+
+Decision:
+
+1. **`injector-claude-code`, persisted outputs.** When a post-phase `empty`, `trunc` or `poison` decision meets a `Bash` record with `persistedOutputPath`, the injector gets the full output from that file through `tt-decide --apply` (a new `output_file` field, read by `tt-decide`, since the hook module cannot read files), and applies the transform to the full output, not to the preview.
+   - `empty`: the record goes back with `stdout` `""` and without the two persisted fields, so the model sees what a command with no output shows. The saved file is overwritten with the empty text, so the real output cannot be read back from it.
+   - `trunc` and `poison`: the saved file is overwritten with the transformed output, `stdout` becomes the transformed output and `persistedOutputSize` its byte size. If the transformed output is under Claude Code's limit, the persisted fields are dropped and the result is an ordinary record.
+   - Any other tool record with `persistedOutputPath` under a post-phase decision passes unchanged and is logged `decision: "undelivered"`, reason `persisted-output`, through `tt-decide --undelivered` (D-0048), so a new case is counted, never hidden.
+2. **`cmca_analysis`.** The delivery check reads the model-visible text from `raw_tool_result` when the trajectory has it (Claude Code), and falls back to the rendered observation otherwise. This fixes the `n-split-reports` case without changing the rule. Regenerating the M5, D-0045, stage 1b and stage 2 summaries must give the same delivered counts except where the old check was wrong; any change is listed in the implementation PR.
+3. **Verification ($0, no model calls).** With the V-01 fake model (`docs/verification/V-01/fake-anthropic.mjs`) on the pinned 2.1.289 in a container: a `Bash` call that prints about 40 KB, once without a fault and once each with `empty`, `trunc` and `poison`. Record the exact limit, what the model received (the request body the fake model logs) and the file content after each run in a V-01 addendum. Unit tests in `injector-claude-code` for the three types and the fallback, and a fixture test in `cmca_analysis` for the `raw_tool_result` path.
+4. **Stage 2 results.** No trial is rerun. `cc-claude` stage 2 delivery stays reported as 90 of 91 with this cause, and the report's section 5 is corrected for the artifact. Stage 3 and stage 4 run `cc-claude` with the fixed injector, listed as a deviation from the pre-registration tag like D-0053.
+
+Alternatives considered:
+
+- Log persisted outputs as undelivered only, and declare the gap: removes the largest outputs from `cc-claude`'s shell exposure while the other harnesses keep them, and Claude Code exposes the full output to the hook, so the gap is avoidable.
+- Raise Claude Code's output limit through its environment so nothing is persisted: changes the harness as shipped, and the model would see 30 KB or more where it normally sees a 2 KB preview.
+- Drop the persisted fields and return the transformed output in `stdout` without touching the file: the real output stays in the session folder, where the model can find it with `ls`.
+
+Consequences: the stage 2 stop is explained by one injector gap and one analysis artifact, both fixed before stage 3 without model spend. `cc-claude` post-phase shell faults reach the model on large outputs with the same shape Claude Code uses for any large output.
