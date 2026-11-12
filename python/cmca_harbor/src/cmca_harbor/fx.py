@@ -78,8 +78,8 @@ def gateway_generation(api_key: str, attempts: int = 12, sleep: Callable[[float]
 
 def session_to_atif(
     session: Path, *, version: str, model: str | None, usage: dict[str, Any] | None = None, settled: dict[str, Any] | None = None
-) -> Trajectory:
-    """ATIF from an fx `sessions/<id>/` directory (`events.jsonl` schema_version 3).
+) -> Trajectory | None:
+    """ATIF from an fx `sessions/<id>/` directory (`events.jsonl` schema_version 3), or None when it has no steps.
 
     `usage` is the `usage` object of fx's `--json` output (token totals over every
     request); `settled` comes from `settle_usage`. Without `settled`, a cost is
@@ -132,6 +132,9 @@ def session_to_atif(
         total_cost_usd=(settled or {}).get("total_cost"),
         total_steps=len(steps),
     )
+    # A run that died before its first step (provider unreachable) has no valid ATIF; raising here would cancel the whole job.
+    if not steps:
+        return None
     return Trajectory(
         schema_version="ATIF-v1.5",
         session_id=session.name,
@@ -236,6 +239,8 @@ class ChaosFx(Fx):
         traj = session_to_atif(
             session, version=self._version or "", model=summary.get("model") or self.model_name, usage=summary.get("usage"), settled=settled
         )
+        if traj is None:
+            return
         (self.logs_dir / "trajectory.json").write_text(json.dumps(traj.to_json_dict(), indent=2))
         fm = traj.final_metrics
         if fm is not None:
