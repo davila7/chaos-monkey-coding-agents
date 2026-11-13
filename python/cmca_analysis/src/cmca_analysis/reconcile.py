@@ -120,17 +120,17 @@ def reconcile(trial: Trial, payloads: dict[str, str], token: str | None, stale: 
             f.delivered = None
             f.attribution_visible = None
             continue
-        f.delivered = delivered(f.type, call.observation, payload, token, stale)
+        f.delivered = delivered(f.type, call.seen, payload, token, stale)
         if f.delivered is False:
             # Calls issued in one step can reach the injector in either order, so the
             # fault may belong to another call of the same tool in that step.
             for c in trial.calls:
                 if (
                     c.index not in taken and c.step == call.step and c.name == call.name
-                    and delivered(f.type, c.observation, payload, token, stale)
+                    and delivered(f.type, c.seen, payload, token, stale)
                 ):
                     taken.discard(f.call)
                     taken.add(c.index)
                     f.call, f.step_id, call, f.delivered = c.index, c.step_id, c, True
                     break
-        f.attribution_visible = attribution_visible(f.type, call.observation, payload) if f.delivered else None
+        f.attribution_visible = attribution_visible(f.type, call.seen, payload) if f.delivered else None

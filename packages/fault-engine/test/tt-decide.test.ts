@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -116,6 +116,46 @@ describe('tt-decide --apply', () => {
     const before = readFileSync(log, 'utf8');
     expect(apply(env, { post: out.post, output: '0123456789' }).output).toBe('012');
     expect(readFileSync(log, 'utf8')).toBe(before);
+  });
+
+  it('transforms the full output from output_file and rewrites the file (D-0054)', async () => {
+    const p = profileWith(profile('moderate'), {
+      base_rate: 1,
+      max_applied_per_trial: 10,
+      weights: { trunc: 1 },
+      persistence: { transient: 1 },
+    });
+    const { env } = setup({ profile: p });
+    const out = JSON.parse(await call(env, { tool_name: 'Bash', capability: 'shell', args: { command: 'ls' } })) as {
+      post: unknown;
+    };
+    const dir = join(mkdtempSync(join(tmpdir(), 'tt-persist-')), 'tool-results');
+    mkdirSync(dir);
+    const file = join(dir, 'b1.txt');
+    writeFileSync(file, '0123456789');
+    expect(apply(env, { post: out.post, output: '01234', output_file: file })).toEqual({ output: '012', file: 'rewritten' });
+    expect(readFileSync(file, 'utf8')).toBe('012');
+  });
+
+  it('reports an output_file it cannot read and leaves the output unchanged', async () => {
+    const p = profileWith(profile('moderate'), {
+      base_rate: 1,
+      max_applied_per_trial: 10,
+      weights: { trunc: 1 },
+      persistence: { transient: 1 },
+    });
+    const { env } = setup({ profile: p });
+    const out = JSON.parse(await call(env, { tool_name: 'Bash', capability: 'shell', args: { command: 'ls' } })) as {
+      post: unknown;
+    };
+    expect(apply(env, { post: out.post, output: 'abc', output_file: '/nonexistent/tool-results/x.txt' })).toEqual({
+      output: 'abc',
+      file: 'unread',
+    });
+    const other = join(mkdtempSync(join(tmpdir(), 'tt-other-')), 'x.txt');
+    writeFileSync(other, 'keep');
+    expect(apply(env, { post: out.post, output: 'abc', output_file: other })).toEqual({ output: 'abc', file: 'unread' });
+    expect(readFileSync(other, 'utf8')).toBe('keep');
   });
 
   it('passes the output through on a missing reference or bad input', () => {

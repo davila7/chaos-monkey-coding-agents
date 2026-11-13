@@ -1652,7 +1652,7 @@ Consequences: Codex's Track N delivery is computed over deliverable calls, with 
 ## D-0054 Claude Code: post-phase faults on outputs saved to a file (plan)
 
 - Date: 2026-11-12
-- Status: Proposed.
+- Status: Accepted (PR #94 merged 2026-11-13). Implemented 2026-11-13: items 1 to 3 done; V-01 section dated 2026-11-13 records item 3. No model calls.
 
 Context: D-0052 stage 2 stopped on fault delivery: `cc-claude` delivered 90 of 91 verifiable Track N faults (98.9%), below the 99% bar (`reports/2026-11-12-m6-stage2.md`). The stage 2 evidence shows two different causes.
 
@@ -1676,3 +1676,8 @@ Alternatives considered:
 - Drop the persisted fields and return the transformed output in `stdout` without touching the file: the real output stays in the session folder, where the model can find it with `ls`.
 
 Consequences: the stage 2 stop is explained by one injector gap and one analysis artifact, both fixed before stage 3 without model spend. `cc-claude` post-phase shell faults reach the model on large outputs with the same shape Claude Code uses for any large output.
+
+Progress:
+
+- 2026-11-13, item 3: with the V-01 fake model on the pinned 2.1.289 (`docs/verification/V-01/2026-11-13-persisted-output/`), the hook gets the Bash record with `stdout` cut to 30,000 characters and the full output in `persistedOutputPath`. A record returned without the two persisted fields is saved again by Claude Code when its `stdout` is large (31,000 characters already is), so item 1 drops the fields for every type instead of keeping them for `trunc` and `poison`: `tt-decide --apply` reads the saved file, transforms the full output, rewrites the file, and the record goes back with the transformed `stdout`. With the injector, `empty` reads `(Bash completed with no output)`, `trunc` shows 17,561 of 58,538 bytes inline, and `poison` reaches a line past the first 30,000 characters; the original file holds the transformed text in each case.
+- 2026-11-13, item 2: the delivery check reads `raw_tool_result` in `cmca_analysis.reconcile` and `cmca_analysis.trials`. Regenerated against `main`: stage 2 changes in one fault, the `n-split-reports` `empty` (now delivered); stage 1b and the fxh pilot do not change. The M5 release regenerated from its evidence changes in 3 `cc-claude` Track N `poison` faults (`n-ledger-fix`, `moderate` attempts 0 and 1), from delivered to not verifiable: the output was saved to a file, Harbor's rendering showed the 30,000-character `stdout` with the poisoned line, and the model saw only the 2 KB preview without it. In that release, `cc-claude` Track N `moderate` `poison` delivery goes from 19 of 28 verifiable to 16 of 25 (all types: 74 of 83 to 71 of 80). The release is not recomputed (D-0042 item 4); the paper's M5 delivery figures should cite this note.

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import catalog from '../../catalog/v1.json' with { type: 'json' };
 import { canonicalArgs } from '../canonical.js';
 import { createEngine, type FaultEngine } from '../engine.js';
@@ -28,17 +28,31 @@ function readStdin(): string {
 }
 
 /**
- * `--apply`: stdin `{ post, output }`, stdout `{ output }`. Applies a
- * post-phase transform chosen by an earlier decide call. Never reads or
- * writes trial state and never logs; on any failure the output is returned
- * unchanged.
+ * `--apply`: stdin `{ post, output, output_file? }`, stdout `{ output }`.
+ * Applies a post-phase transform chosen by an earlier decide call. Never
+ * reads or writes trial state and never logs; on any failure the output is
+ * returned unchanged.
+ *
+ * With `output_file` (a harness file under `tool-results/` that holds the
+ * full output, D-0054), the transform runs on that file's content and the
+ * transformed text replaces the file, so the real output cannot be read back
+ * from it. stdout then carries `file: "rewritten"`, or `file: "unread"` with
+ * the stdin output unchanged when the file could not be read or written.
  */
 function applyMain(raw: string): void {
   let output = '';
+  let file: 'rewritten' | 'unread' | undefined;
   try {
-    const p = JSON.parse(raw) as { post?: PostRef; output?: unknown };
+    const p = JSON.parse(raw) as { post?: PostRef; output?: unknown; output_file?: unknown };
     output = typeof p.output === 'string' ? p.output : '';
-    if (p.post) {
+    let path: string | undefined;
+    if (p.output_file !== undefined) {
+      file = 'unread';
+      if (typeof p.output_file === 'string' && p.output_file.startsWith('/') && p.output_file.includes('/tool-results/')) {
+        path = p.output_file;
+      }
+    }
+    if (p.post && (p.output_file === undefined || path)) {
       const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as EngineConfig;
       const engine = createEngine({
         config,
@@ -46,12 +60,23 @@ function applyMain(raw: string): void {
         store: new MemoryStateStore(),
         sink: { write() {} },
       });
-      output = engine.applyOutput(fromPostRef(p.post), output);
+      const original = output;
+      try {
+        const full = path ? readFileSync(path, 'utf8') : output;
+        const out = engine.applyOutput(fromPostRef(p.post), full);
+        if (path) {
+          writeFileSync(path, out);
+          file = 'rewritten';
+        }
+        output = out;
+      } catch {
+        output = original;
+      }
     }
   } catch {
     // pass the original output through
   }
-  process.stdout.write(JSON.stringify({ output }));
+  process.stdout.write(JSON.stringify(file ? { output, file } : { output }));
 }
 
 /**
