@@ -61,3 +61,10 @@ def test_pending_generations_are_settled_or_cost_is_withheld(tmp_path):
     unsettled = session_to_atif(session, version="0.0.13", model="m", usage=usage).final_metrics
     assert unsettled.total_cost_usd is None and unsettled.total_prompt_tokens == 132978
     assert session_to_atif(session, version="0.0.13", model="m", usage=usage, settled=settled).final_metrics.total_cost_usd == settled["total_cost"]
+
+
+def test_session_without_steps_gives_no_trajectory(tmp_path):
+    session = tmp_path / "s"
+    session.mkdir()
+    (session / "events.jsonl").write_text("")
+    assert session_to_atif(session, version="0.0.13", model="m") is None
