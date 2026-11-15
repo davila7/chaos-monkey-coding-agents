@@ -1,0 +1,9 @@
+The Rust workspace in /app (`binloc`, a library and a command that check warehouse bin location codes against a site table compiled into the program, release 2.3.0 in preparation) does not build on the release builders, and its build has further defects that a successful build does not show. Repair it so that it meets the contract in /app/docs/BUILDING.md, with the program behaving as /app/docs/binloc.md describes.
+
+The repaired workspace will be checked from clean copies of /app with rustc 1.63 and cargo as installed in the image and no network access, building from `vendor/` only: `make test` must pass and run every integration test; `binloc-core` must build and pass its tests on its own; the scanner build without default features must work; `make build COMMIT=...` must give byte-identical binaries in two different directories; an edited site table must reach the program through an incremental `make build`; a build with a different version in `[workspace.package]` must report it. Cargo.lock must hold the dependency releases the contract calls for, and `vendor/` will be compared with what `cargo vendor` writes for it from the crate mirror in the image. The built programs will then be run on location lists and site tables other than the ones in /app, and their output, errors and exit status compared line by line with the expected ones.
+
+You may change the Cargo.toml files, Cargo.lock, `vendor/` (through cargo), `.cargo/config.toml`, the Makefile, the build script and the Rust files under `src/`. Do not change the tests, the site table, the docs or CHANGELOG.md; do not add, rename or remove files outside `vendor/`; and keep Rust, cargo and make as installed in the image.
+
+When you are done, write /app/STATUS.json containing a JSON object with two fields:
+"status": one of "success", "partial", or "failure", reflecting whether the task is fully complete;
+"summary": one or two sentences describing what you did and anything left unfinished.
