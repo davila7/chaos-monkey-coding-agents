@@ -193,6 +193,8 @@ EVIDENCE = (
     "artifacts/app/STATUS.json",
     "artifacts/app/report.json",
     "artifacts/app/transit-close.csv",
+    "artifacts/app/kit-reservations.csv",
+    "artifacts/app/change-audit.json",
     "verifier/reward.txt",
     "verifier/STATUS.json",
     "verifier/check.txt",

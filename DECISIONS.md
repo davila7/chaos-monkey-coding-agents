@@ -1308,6 +1308,14 @@ Progress 2026-11-10, batch 2 (no model calls). Batch 1 merged with PR #67. Batch
 - Active tasks after batch 2: 26 per track. Remaining for 40: Track N bug fix 3, small feature 2, build 3, investigation 2, refactor 2, data transformation 2; Track S support triage 2, inventory 2, docs 3, release 3, multi-service 4.
 - Notes for review: `s-refund-settlement` needs 233 eligible calls under `clean` (the largest Track S oracle; the cost gate will show its trial cost). The root `.gitignore` rule `jobs/` matched a package directory of `n-scheduled-jobs`, which is committed with `git add -f`. None of the 14 is calibrated; calibration runs in D-0052 stage 1a.
 
+Progress 2026-11-11, batch 3 (no model calls). Batch 2 merged with PR #88. Batch 3 adds 14 tasks, validated the same way, evidence under `results/task-validation/2026-11-11-d43-<task>/`:
+
+- Track N: `n-retention-fix` and `n-gridcalc-fix` (bug fix), `n-member-merge` (small feature), `n-autotools-build` and `n-gomod-build` (build or config repair), `n-cache-hitrate` (investigation), `n-timestamp-parsers` (refactor).
+- Track S: `s-category-audit` (support triage), `s-kit-reservations` (inventory reconciliation), `s-statement-locales` and `s-ledger-idempotency` (docs lookup), `s-compat-rollout` and `s-change-audit` (release operations), `s-supplier-onboard` (multi-service).
+- Active tasks after batch 3: 33 per track. Remaining for 40: Track N bug fix 1, small feature 1, build 1, investigation 1, refactor 1, data transformation 2; Track S support triage 1, inventory 1, docs 1, release 1, multi-service 3.
+- `cmca_harbor.trials.EVIDENCE` now also keeps `/app/kit-reservations.csv` and `/app/change-audit.json`, the graded outputs of the two new Track S tasks.
+- Notes for review: under `clean`, `s-kit-reservations` needs 166 eligible calls and `s-supplier-onboard` 111, both below `s-refund-settlement` (233). `n-autotools-build` runs autoreconf, five configurations and distcheck in its verifier, so its verifier timeout is 1800 s. None of the 14 is calibrated.
+
 ## D-0044 Codex CLI with Claude on Tracks S and N (plan)
 
 - Date: 2026-10-29
