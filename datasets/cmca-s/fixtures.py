@@ -30,6 +30,7 @@ import fixtures_kits
 import fixtures_loaner
 import fixtures_multi
 import fixtures_refund
+import fixtures_regions
 import fixtures_offboarding
 import fixtures_routing
 import fixtures_quayline
@@ -400,6 +401,7 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-oncall-routing/solution/oracle_docs.py"] = (ROOT / "oracle_docs.py").read_text()
     files.update(fixtures_quayline.outputs(ROOT, client))
     files.update(fixtures_penwick.outputs(ROOT, client))
+    files.update(fixtures_regions.outputs(ROOT, CANARY, client))
     files.update(fixtures_outage.outputs(ROOT, CANARY, client))
     files.update(fixtures_compat.outputs(ROOT, CANARY, client))
     files.update(fixtures_supplier.outputs(ROOT, CANARY, client))
