@@ -263,3 +263,24 @@ def test_codex_command_that_outlived_its_yield_is_undeliverable(tmp_path: Path):
     echoed = done.replace("Output:\n", "Output:\nProcess running with session ID 3\n")
     assert not ingest.outlived_yield(codex(_event(0, "Bash", "shell", "apply", "empty")), echoed)
     assert ingest.outlived_yield(codex(_event(0, "Bash", "shell", "apply", "empty")), running)
+
+
+def test_claude_code_delivery_reads_the_result_the_model_received():
+    """D-0054: Harbor renders a Bash record as `[stdout]` and `[metadata]` lines; the model saw `raw_tool_result`."""
+    from cmca_analysis.ingest import trajectory_steps
+    from cmca_analysis.trials import tool_calls
+
+    rendered = 'Exit code 1\n\n[stdout]\nExit code 1\n[metadata] {"noOutputExpected": false}'
+    meta = {"tool_result_metadata": {"raw_tool_result": {"type": "tool_result", "content": "Exit code 1", "is_error": False}}}
+    step = {
+        "source": "agent",
+        "message": "",
+        "tool_calls": [{"tool_call_id": "t1", "function_name": "Bash", "arguments": {"command": "false"}}],
+        "observation": {"results": [{"source_call_id": "t1", "content": rendered, "extra": meta}]},
+    }
+    other = {**step, "observation": {"results": [{"source_call_id": "t1", "content": "plain"}]}}
+    assert not delivered("empty", rendered, "", None)
+    assert [c[1] for c in tool_calls({"steps": [step, other]})] == ["Exit code 1", "plain"]
+    _, calls = trajectory_steps({"steps": [step]})
+    assert calls[0].observation == rendered and calls[0].seen == "Exit code 1"
+    assert delivered("empty", calls[0].seen, "", None)

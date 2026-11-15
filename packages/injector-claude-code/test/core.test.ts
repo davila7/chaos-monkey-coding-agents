@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resolveEngineConfig, type EngineConfigInput } from '@cmca/fault-engine';
@@ -135,6 +135,42 @@ describe('handle with the real engine', () => {
     const { run, log } = realRun(engineConfig({ deny: 1 }, { profile: { schema: 'tt-profile/2', name: 'clean', base_rate: 0, max_applied_per_trial: 0 } }));
     await handle({ ...bash('ls'), agentId: 'a-1' }, nextSpy(bashResult('')).next, run);
     expect(JSON.parse(readFileSync(log, 'utf8').trim())).toMatchObject({ agent_id: 'a-1', decision: 'pass' });
+  });
+
+  it('transforms the full saved output of a large command and rewrites the saved file (D-0054)', async () => {
+    const { run } = realRun(engineConfig({ trunc: 1 }));
+    const dir = join(mkdtempSync(join(tmpdir(), 'cc-p-')), 'tool-results');
+    mkdirSync(dir);
+    const path = join(dir, 'b1.txt');
+    writeFileSync(path, '0123456789ABCDEF');
+    // The record's stdout is only the start of the output; the cut applies to the full saved text.
+    const saved = { stdout: '01', stderr: '', interrupted: false, persistedOutputPath: path, persistedOutputSize: 16 };
+    const out = await handle(bash('seq 1 9000'), nextSpy({ result: saved }).next, run);
+    expect(out).toEqual({ result: { stdout: '0123', stderr: '', interrupted: false } });
+    expect(readFileSync(path, 'utf8')).toBe('0123');
+  });
+
+  it('empties a saved output to a plain empty record and empties the file', async () => {
+    const { run } = realRun(engineConfig({ empty: 1 }));
+    const dir = join(mkdtempSync(join(tmpdir(), 'cc-p-')), 'tool-results');
+    mkdirSync(dir);
+    const path = join(dir, 'b2.txt');
+    writeFileSync(path, 'real output');
+    const saved = { stdout: 'real', stderr: '', interrupted: false, persistedOutputPath: path, persistedOutputSize: 11 };
+    const out = await handle(bash('cat big'), nextSpy({ result: saved }).next, run);
+    expect(out).toEqual({ result: { stdout: '', stderr: '', interrupted: false } });
+    expect(readFileSync(path, 'utf8')).toBe('');
+  });
+
+  it('logs a saved output it cannot read as undelivered and passes the call', async () => {
+    const { run, log } = realRun(engineConfig({ empty: 1 }));
+    const saved: CallResult = {
+      result: { stdout: 'real', stderr: '', interrupted: false, persistedOutputPath: '/nonexistent/tool-results/x.txt', persistedOutputSize: 9 },
+    };
+    expect(await handle(bash('cat big'), nextSpy(saved).next, run)).toEqual(saved);
+    const records = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(records.map((r) => r.decision)).toEqual(['apply', 'undelivered']);
+    expect(records[1]).toMatchObject({ reason: 'persisted-output', type: 'empty', of_seq: records[0].seq });
   });
 
   it('transforms the output of a shell command that exited non-zero', async () => {

@@ -59,6 +59,13 @@ def content_text(content: Any) -> str:
     return "\n".join(p.get("text") or "" for p in content if isinstance(p, dict))
 
 
+def raw_result(r: dict[str, Any] | None) -> str | None:
+    raw = ((((r or {}).get("extra") or {}).get("tool_result_metadata") or {}).get("raw_tool_result") or {})
+    if not isinstance(raw, dict) or "content" not in raw:
+        return None
+    return content_text(raw.get("content"))
+
+
 _FX_NOT_RUN = re.compile(r'"type":"tool_execution_failed".*so fx did not run the call', re.S)
 
 
@@ -94,10 +101,17 @@ class Call:
     decision: str | None = None
     shell_class: str | None = None  # capability class a shell command achieves (SPEC 11.1)
     signature: str | None = None  # class or program of a shell command's lead segment (SPEC 11.1 rule 3)
+    # The tool result as the model received it, where the trajectory keeps it (Claude Code's
+    # `raw_tool_result`). Harbor's rendered `observation` adds `[stdout]` and `[metadata]` lines (D-0054).
+    raw: str | None = None
 
     @property
     def name(self) -> str:
         return bare_name(self.tool)
+
+    @property
+    def seen(self) -> str:
+        return self.raw if self.raw is not None else self.observation
 
     @property
     def command(self) -> str | None:
@@ -290,6 +304,7 @@ def trajectory_steps(trajectory: dict[str, Any] | None) -> tuple[list[str], list
                     tool=call.get("function_name") or "",
                     args=args if isinstance(args, dict) else {},
                     observation=content_text(r.get("content")) if r else "",
+                    raw=raw_result(r),
                 )
             )
     return messages, calls

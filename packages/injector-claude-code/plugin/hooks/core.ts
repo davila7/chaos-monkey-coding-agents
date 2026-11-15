@@ -28,6 +28,7 @@ interface PostRef {
   payload_id: string;
   poison_index?: number;
   drift_index?: number;
+  seq?: number;
 }
 
 interface Decision {
@@ -140,6 +141,51 @@ async function applyPost(run: Run, post: PostRef, output: string): Promise<strin
   return (JSON.parse(r.stdout) as { output: string }).output;
 }
 
+async function undelivered(run: Run, post: PostRef, tool: string, reason: string): Promise<void> {
+  await run([...TT_DECIDE, '--undelivered'], {
+    stdin: JSON.stringify({ post, tool_name: tool, capability: capabilityOf(tool), reason }),
+    timeoutMs: 5000,
+  });
+}
+
+function persistedPath(result: unknown): string | null {
+  if (result === null || typeof result !== 'object' || Array.isArray(result)) return null;
+  const p = (result as Record<string, unknown>).persistedOutputPath;
+  return typeof p === 'string' ? p : null;
+}
+
+// Claude Code 2.1.289 caps a Bash record's `stdout` at its first 30,000
+// characters and saves the full output to `persistedOutputPath` before the
+// hook gets the record; the model is shown the path and a preview (V-01,
+// 2026-11-13). The transform runs on the saved file, which `tt-decide`
+// rewrites, and the record goes back without the two persisted fields:
+// Claude Code saves a large `stdout` from a hook to a new file by itself, and
+// shows an empty one as a command with no output. Anything else carrying a
+// saved output is logged as undelivered (D-0054).
+async function persistedOutput(
+  tool: string,
+  result: Record<string, unknown>,
+  path: string,
+  post: PostRef,
+  run: Run,
+): Promise<CallResult | null> {
+  if (tool === 'Bash' && typeof result.stdout === 'string') {
+    const r = await run([...TT_DECIDE, '--apply'], {
+      stdin: JSON.stringify({ post, output: result.stdout, output_file: path }),
+      timeoutMs: 5000,
+    });
+    if (r.exitCode === 0) {
+      const p = JSON.parse(r.stdout) as { output: string; file?: string };
+      if (p.file === 'rewritten') {
+        const { persistedOutputPath: _p, persistedOutputSize: _s, ...rest } = result;
+        return { result: { ...rest, stdout: p.output } };
+      }
+    }
+  }
+  await undelivered(run, post, tool, 'persisted-output');
+  return null;
+}
+
 async function failedShell(tool: string, result: unknown, post: PostRef, run: Run): Promise<CallResult | null> {
   if (tool !== 'Bash' || typeof result !== 'string') return null;
   const m = FAILED_SHELL.exec(result);
@@ -178,6 +224,8 @@ export async function handle(e: CallEvent, next: Next, run: Run): Promise<CallRe
   }
   if (d.type === 'falsefail') return { deny: d.text ?? '' };
   if (!d.post) return res;
+  const saved = persistedPath(res.result);
+  if (saved) return (await persistedOutput(e.tool, res.result as Record<string, unknown>, saved, d.post, run)) ?? res;
   const view = textView(e.tool, res.result);
   if (!view) return res;
   const out = await applyPost(run, d.post, view.text);

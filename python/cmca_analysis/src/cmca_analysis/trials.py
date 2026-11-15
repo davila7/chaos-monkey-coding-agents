@@ -36,7 +36,7 @@ from .ingest import (
     undelivered_seqs,
     unlogged,
 )
-from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, read_json as _json
+from .ingest import MCP_PREFIX as _MCP_PREFIX, content_text as _text, raw_result, read_json as _json
 from .reconcile import delivered
 
 EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
@@ -46,14 +46,19 @@ _JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+$")
 
 
 def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any]]]:
-    """(tool name, observation text, arguments) for every tool call, in trajectory order."""
+    """(tool name, observation text, arguments) for every tool call, in trajectory order.
+
+    The text is the result as the model received it where the trajectory keeps that (`raw_result`, D-0054).
+    """
     out = []
     for step in (trajectory or {}).get("steps", []):
         results = {r.get("source_call_id"): r for r in ((step.get("observation") or {}).get("results") or [])}
         for call in step.get("tool_calls") or []:
             r = results.get(call.get("tool_call_id"))
             args = call.get("arguments")
-            out.append((call.get("function_name") or "", _text(r.get("content")) if r else "", args if isinstance(args, dict) else {}))
+            raw = raw_result(r)
+            text = raw if raw is not None else (_text(r.get("content")) if r else "")
+            out.append((call.get("function_name") or "", text, args if isinstance(args, dict) else {}))
     return out
 
 
