@@ -19,6 +19,7 @@ import fixtures_compat
 import fixtures_closure
 import fixtures_contracts
 import fixtures_audit
+import fixtures_bins
 import fixtures_deploy
 import fixtures_docs
 import fixtures_freeze
@@ -409,6 +410,7 @@ def outputs() -> dict[Path, str]:
     files.update(fixtures_loaner.outputs(ROOT, CANARY, client))
     files.update(fixtures_contracts.outputs(ROOT, CANARY, client))
     files.update(fixtures_hollin.outputs(ROOT, client))
+    files.update(fixtures_bins.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
