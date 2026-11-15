@@ -24,6 +24,7 @@ import fixtures_freeze
 import fixtures_inventory
 import fixtures_meridale
 import fixtures_kits
+import fixtures_loaner
 import fixtures_multi
 import fixtures_refund
 import fixtures_offboarding
@@ -403,6 +404,7 @@ def outputs() -> dict[Path, str]:
     files.update(fixtures_audit.outputs(ROOT, CANARY, client))
     files.update(fixtures_taxonomy.outputs(ROOT, CANARY, client))
     files.update(fixtures_closure.outputs(ROOT, CANARY, client))
+    files.update(fixtures_loaner.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()
