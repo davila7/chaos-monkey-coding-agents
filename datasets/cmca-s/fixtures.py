@@ -16,19 +16,26 @@ import sys
 from pathlib import Path
 
 import fixtures_compat
+import fixtures_closure
+import fixtures_contracts
 import fixtures_audit
+import fixtures_bins
 import fixtures_deploy
 import fixtures_docs
 import fixtures_freeze
+import fixtures_hollin
 import fixtures_inventory
 import fixtures_meridale
 import fixtures_kits
+import fixtures_loaner
 import fixtures_multi
 import fixtures_refund
+import fixtures_regions
 import fixtures_offboarding
 import fixtures_routing
 import fixtures_quayline
 import fixtures_penwick
+import fixtures_pricing
 import fixtures_outage
 import fixtures_sla
 import fixtures_supplier
@@ -394,6 +401,7 @@ def outputs() -> dict[Path, str]:
     files[ROOT / "s-oncall-routing/solution/oracle_docs.py"] = (ROOT / "oracle_docs.py").read_text()
     files.update(fixtures_quayline.outputs(ROOT, client))
     files.update(fixtures_penwick.outputs(ROOT, client))
+    files.update(fixtures_regions.outputs(ROOT, CANARY, client))
     files.update(fixtures_outage.outputs(ROOT, CANARY, client))
     files.update(fixtures_compat.outputs(ROOT, CANARY, client))
     files.update(fixtures_supplier.outputs(ROOT, CANARY, client))
@@ -401,6 +409,12 @@ def outputs() -> dict[Path, str]:
     files.update(fixtures_kits.outputs(ROOT, CANARY, client))
     files.update(fixtures_audit.outputs(ROOT, CANARY, client))
     files.update(fixtures_taxonomy.outputs(ROOT, CANARY, client))
+    files.update(fixtures_closure.outputs(ROOT, CANARY, client))
+    files.update(fixtures_loaner.outputs(ROOT, CANARY, client))
+    files.update(fixtures_contracts.outputs(ROOT, CANARY, client))
+    files.update(fixtures_hollin.outputs(ROOT, client))
+    files.update(fixtures_bins.outputs(ROOT, CANARY, client))
+    files.update(fixtures_pricing.outputs(ROOT, CANARY, client))
     for task in ("s-duplicate-merge", "s-p1-report", "s-followups", *INVENTORY_TASKS, *DEPLOY_TASKS, *DOCS_TASKS):
         files[ROOT / task / "solution/oracle_client.py"] = client
     helper = (ROOT / "oracle_inventory.py").read_text()

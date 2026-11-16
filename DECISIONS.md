@@ -1316,6 +1316,15 @@ Progress 2026-11-11, batch 3 (no model calls). Batch 2 merged with PR #88. Batch
 - `cmca_harbor.trials.EVIDENCE` now also keeps `/app/kit-reservations.csv` and `/app/change-audit.json`, the graded outputs of the two new Track S tasks.
 - Notes for review: under `clean`, `s-kit-reservations` needs 166 eligible calls and `s-supplier-onboard` 111, both below `s-refund-settlement` (233). `n-autotools-build` runs autoreconf, five configurations and distcheck in its verifier, so its verifier timeout is 1800 s. None of the 14 is calibrated.
 
+Progress 2026-11-15, batch 4 (no model calls). Batch 3 merged with PR #93. Batch 4 adds the last 14 tasks, validated the same way, evidence under `results/task-validation/2026-11-15-d43-<task>/`:
+
+- Track N: `n-patchkit-fix` (bug fix), `n-log-rotation` (small feature), `n-cargo-build` (build or config repair), `n-deadletter-triage` (investigation), `n-access-rules` (refactor), `n-library-fees` and `n-survey-crosstabs` (data transformation).
+- Track S: `s-contract-tiers` (support triage), `s-bin-consolidation` (inventory reconciliation), `s-chunked-upload` (docs lookup plus a code change), `s-region-windows` (release operations), `s-store-closure`, `s-loaner-overdue` and `s-price-revision` (multi-service).
+- Active tasks after batch 4: 40 per track, the D-0043 target.
+- Fix to batch 3: the root `.gitignore` rule `*.log` had dropped `n-cache-hitrate`'s `tests/hidden/logs` and `tests/visible/fixtures/mini/logs`, so on a fresh checkout its verifier could not replay. The logs are regenerated with its `plan.py` (output identical to the committed `plan.txt`) and `datasets/**/tests/**/*.log` is no longer ignored. The batch 3 and batch 4 tasks were validated again from this branch's checkout, where no ignored file is present.
+- `cmca_harbor.trials.EVIDENCE` also keeps `/app/move-plan.csv`, `/app/rollout-2026.11.json`, `/app/archive/hollin.py` and the verifier copy of `deadletter-report.json`.
+- Notes for review: under `clean`, the largest new Track S oracles are `s-store-closure` (120 eligible calls) and `s-loaner-overdue` (110); `s-chunked-upload` needs 10, above the floor of 8. `s-price-revision` keeps prices in docs and tickets because inventory item records have no price field; inventory supplies categories and the clearance moves. None of the 14 is calibrated.
+
 ## D-0044 Codex CLI with Claude on Tracks S and N (plan)
 
 - Date: 2026-10-29

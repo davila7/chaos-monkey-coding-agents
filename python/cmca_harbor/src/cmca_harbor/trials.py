@@ -195,8 +195,12 @@ EVIDENCE = (
     "artifacts/app/transit-close.csv",
     "artifacts/app/kit-reservations.csv",
     "artifacts/app/change-audit.json",
+    "artifacts/app/move-plan.csv",
+    "artifacts/app/rollout-2026.11.json",
+    "artifacts/app/archive/hollin.py",
     "verifier/reward.txt",
     "verifier/STATUS.json",
+    "verifier/deadletter-report.json",
     "verifier/check.txt",
     "verifier/unittest.txt",
 )

@@ -1,0 +1,9 @@
+The `docshelf` package in /app decides who may do what in many places: each command (`list`, `show`, `edit`, `share`, `delete`, `audit`) carries its own copy of the checks for roles, ownership, team documents, time-limited grants, delegations and suspended accounts. Move every one of those checks into one new module, `docshelf/access.py`, as described in /app/docs/access.md, and follow every rule in that guide: the exact public names and behavior of `access.py`, a `RULES` value in each command module, no access decision outside `access.py`, `store.py`, `render.py` and `errors.py` left as they are, the public functions of the other modules kept, and the command line behavior unchanged. The commands and the workspace files are in /app/docs/cli.md; sample workspaces are in /app/samples. The tests in /app/tests must keep passing unchanged; from /app they run with:
+
+    python -m unittest discover -s tests -t .
+
+This is a pure refactor: no command may change what it prints, what it writes to the workspace or its exit status, even where the copies disagree with each other today (whether a grant or a delegation is still open at its `until` minute, on which day a suspension ends, how role names typed in odd case or with spaces are read, users and documents without a team, who may hand out a grant on every document, what a delegate may do). The result will be checked against the original package with workspaces other than the ones in /app, through every command and option, and `docshelf.access` will be called directly with rules and data of its own, so every rule must hold for any input, not only for the samples.
+
+When you are done, write /app/STATUS.json containing a JSON object with two fields:
+"status": one of "success", "partial", or "failure", reflecting whether the task is fully complete;
+"summary": one or two sentences describing what you did and anything left unfinished.
