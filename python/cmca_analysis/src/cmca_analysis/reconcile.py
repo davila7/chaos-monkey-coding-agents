@@ -123,14 +123,25 @@ def reconcile(trial: Trial, payloads: dict[str, str], token: str | None, stale: 
         f.delivered = delivered(f.type, call.seen, payload, token, stale)
         if f.delivered is False:
             # Calls issued in one step can reach the injector in either order, so the
-            # fault may belong to another call of the same tool in that step.
+            # fault may belong to another call of the same tool in that step. A sibling held
+            # by a fault not shown as delivered there is swapped when that fault is not shown
+            # as undelivered on the call it receives.
             for c in trial.calls:
-                if (
-                    c.index not in taken and c.step == call.step and c.name == call.name
-                    and delivered(f.type, c.seen, payload, token, stale)
-                ):
+                if c.step != call.step or c.name != call.name or c.index == call.index or not delivered(f.type, c.seen, payload, token, stale):
+                    continue
+                holder = next((g for g in trial.faults if g is not f and g.call == c.index), None) if c.index in taken else None
+                if c.index in taken:
+                    if holder is None:
+                        continue
+                    hp = payloads.get(holder.payload_id or "", "")
+                    if delivered(holder.type, c.seen, hp, token, stale) is True or delivered(holder.type, call.seen, hp, token, stale) is False:
+                        continue
+                    holder.call, holder.step_id = call.index, call.step_id
+                    holder.delivered = delivered(holder.type, call.seen, hp, token, stale)
+                    holder.attribution_visible = attribution_visible(holder.type, call.seen, hp) if holder.delivered else None
+                else:
                     taken.discard(f.call)
                     taken.add(c.index)
-                    f.call, f.step_id, call, f.delivered = c.index, c.step_id, c, True
-                    break
+                f.call, f.step_id, call, f.delivered = c.index, c.step_id, c, True
+                break
         f.attribution_visible = attribution_visible(f.type, call.seen, payload) if f.delivered else None
