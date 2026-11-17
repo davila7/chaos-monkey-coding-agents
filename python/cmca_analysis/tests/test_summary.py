@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from cmca_analysis.trials import delivered, dumps, join_events, poison_eligible, summarize
+from cmca_analysis.trials import delivered, dumps, join_events, poison_eligible, repair_siblings, summarize
 from cmca_analysis.ingest import Fault, stale_lines
 from cmca_analysis.reconcile import reconcile
 from factory import call, trial
@@ -144,6 +144,28 @@ def test_reconcile_pairs_a_fault_within_its_step_by_what_was_delivered():
     t.events = [_event(i, "bash", "shell") for i in range(3)]
     reconcile(t, payloads, None)
     assert (f.call, f.delivered) == (1, True)
+
+
+def test_reconcile_swaps_a_parallel_call_held_by_an_unverifiable_fault():
+    payloads = {"deny.eacces": "EACCES: permission denied", "trunc.head30": ""}
+    calls = [call(0, 5, "Read", obs="1\tdata"), call(1, 5, "Read", obs="<tool_use_error>EACCES: permission denied</tool_use_error>")]
+    trunc = Fault(seq=0, type="trunc", capability="fs.read", payload_id="trunc.head30", persistence="transient", call=1)
+    deny = Fault(seq=1, type="deny", capability="fs.read", payload_id="deny.eacces", persistence="transient", call=0)
+    t = trial(calls=calls, faults=[trunc, deny])
+    t.events = [_event(0, "Read", "fs.read"), _event(1, "Read", "fs.read")]
+    reconcile(t, payloads, None)
+    assert (deny.call, deny.delivered, trunc.call, trunc.delivered) == (1, True, 0, None)
+
+
+def test_trials_summary_swaps_a_parallel_call_held_by_an_unverifiable_fault():
+    data, denied = ("Read", "1\tdata", {}, 5), ("Read", "<tool_use_error>EACCES: permission denied</tool_use_error>", {}, 5)
+    trunc, deny = _event(0, "Read", "fs.read", "apply", "trunc", "t"), _event(1, "Read", "fs.read", "apply", "deny", "d")
+    payloads = {"d": "EACCES: permission denied", "t": ""}
+    check = lambda e, obs: delivered(e["type"], obs, payloads[e["payload_id"]], None)
+    out = repair_siblings([(trunc, denied), (deny, data)], [data, denied], check)
+    assert out == [(trunc, data), (deny, denied)]
+    held = [(deny, data), (_event(2, "Read", "fs.read", "apply", "deny", "d"), denied)]
+    assert repair_siblings(held, [data, denied], check) == held
 
 
 def test_reconcile_leaves_delivery_open_when_the_trajectory_lacks_calls():

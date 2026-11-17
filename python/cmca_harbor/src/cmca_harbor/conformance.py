@@ -7,6 +7,7 @@
 """
 
 import argparse
+import atexit
 import base64
 import json
 import math
@@ -206,6 +207,8 @@ MAX_STALE_LINES = 10
 def _generated(build: Path) -> Path:
     """Output of a task's `environment/gen/build.py`, which some Track N images run to build /app."""
     out = Path(tempfile.mkdtemp(prefix="tt-gen-"))
+    # Generated repos are tens of MB each; left in /tmp they filled the disk during M6 stage 3.
+    atexit.register(shutil.rmtree, out, True)
     subprocess.run([sys.executable, str(build), str(out / "app")], check=True, capture_output=True)
     return out / "app"
 

@@ -19,6 +19,7 @@ import json
 import re
 import sys
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -45,20 +46,20 @@ EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
 _JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+$")
 
 
-def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any]]]:
-    """(tool name, observation text, arguments) for every tool call, in trajectory order.
+def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any], int]]:
+    """(tool name, observation text, arguments, step ordinal) for every tool call, in trajectory order.
 
     The text is the result as the model received it where the trajectory keeps that (`raw_result`, D-0054).
     """
     out = []
-    for step in (trajectory or {}).get("steps", []):
+    for ordinal, step in enumerate((trajectory or {}).get("steps", [])):
         results = {r.get("source_call_id"): r for r in ((step.get("observation") or {}).get("results") or [])}
         for call in step.get("tool_calls") or []:
             r = results.get(call.get("tool_call_id"))
             args = call.get("arguments")
             raw = raw_result(r)
             text = raw if raw is not None else (_text(r.get("content")) if r else "")
-            out.append((call.get("function_name") or "", text, args if isinstance(args, dict) else {}))
+            out.append((call.get("function_name") or "", text, args if isinstance(args, dict) else {}, ordinal))
     return out
 
 
@@ -69,6 +70,32 @@ def _join(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tu
             name = _MCP_PREFIX.sub("", c[0])
             by_tool.setdefault(LOG_NAMES.get(name, name), []).append(c)
     return pair(events, by_tool, lambda c: c[2] if len(c) > 2 else {})
+
+
+def repair_siblings(applied: list[tuple[dict[str, Any], tuple[Any, ...] | None]], calls: list[tuple[Any, ...]], check: Callable[[dict[str, Any], str], bool | None]) -> list[tuple[dict[str, Any], tuple[Any, ...] | None]]:
+    """Moves a fault that order paired with the wrong parallel call to the call in its step that shows it.
+
+    Calls issued in one step reach the injector in either order. A sibling held by a
+    fault that is not shown as delivered there is swapped when that fault is not shown
+    as undelivered on the call it receives (the same rule as `reconcile.reconcile`).
+    """
+    out = list(applied)
+    for i, (e, c) in enumerate(out):
+        if c is None or len(c) < 4 or check(e, c[1]) is not False:
+            continue
+        held = {id(oc): j for j, (_, oc) in enumerate(out) if oc is not None}
+        for sib in calls:
+            if sib is c or len(sib) < 4 or sib[3] != c[3] or sib[0] != c[0] or check(e, sib[1]) is not True:
+                continue
+            j = held.get(id(sib))
+            if j is not None:
+                other = out[j][0]
+                if check(other, sib[1]) is True or check(other, c[1]) is False:
+                    continue
+                out[j] = (other, c)
+            out[i] = (e, sib)
+            break
+    return out
 
 
 def join_events(events: list[dict[str, Any]], calls: list[tuple[Any, ...]]) -> list[tuple[dict[str, Any], str | None]]:
@@ -105,7 +132,8 @@ def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]
         events_path = trial / "artifacts/var/log/tt/events.jsonl"
     events = [json.loads(l) for l in events_path.read_text().splitlines() if l.strip()] if events_path.exists() else []
     undelivered = undelivered_seqs(events)
-    joined_calls = _join([e for e in events if e.get("decision") != UNDELIVERED], tool_calls(_json(trial / "agent/trajectory.json")))
+    calls = tool_calls(_json(trial / "agent/trajectory.json"))
+    joined_calls = _join([e for e in events if e.get("decision") != UNDELIVERED], calls)
     joined = [(e, c[1] if c else None) for e, c in joined_calls]
     for e, obs in joined:
         if isinstance(e.get("seq"), int) and e["seq"] not in undelivered and outlived_yield(e, obs):
@@ -113,14 +141,15 @@ def load_trial(trial: Path, payloads: dict[str, str], decls: dict[str, TaskDecl]
     decl = decls.get(task, TaskDecl())
     token = decl.token
     faults = []
-    undeliverable = 0
-    for e, obs in joined:
-        if e.get("decision") != "apply":
-            continue
-        if e.get("seq") in undelivered:
-            undeliverable += 1
-            continue
-        ok = None if obs is None else delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token, decl.stale)
+    undeliverable = sum(1 for e, _ in joined if e.get("decision") == "apply" and e.get("seq") in undelivered)
+
+    def check(e: dict[str, Any], obs: str) -> bool | None:
+        return delivered(e["type"], obs, payloads.get(e.get("payload_id") or "", ""), token, decl.stale)
+
+    applied = [(e, c) for e, c in joined_calls if e.get("decision") == "apply" and e.get("seq") not in undelivered]
+    for e, c in repair_siblings(applied, calls, check):
+        obs = c[1] if c else None
+        ok = None if obs is None else check(e, obs)
         faults.append({"type": e["type"], "capability": e["capability"], "payload_id": e.get("payload_id"), "delivered": ok, "joined": obs is not None})
     reward_txt = trial / "verifier/reward.txt"
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
