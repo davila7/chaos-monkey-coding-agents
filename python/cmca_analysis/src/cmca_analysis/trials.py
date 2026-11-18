@@ -43,7 +43,7 @@ from .reconcile import delivered
 EXPOSURE_FLOOR = 8  # SPEC 10.3, eligible calls per clean pilot trial
 # Track S jobs get their profile through TT_CONFIG_DIR, which Harbor does not
 # record, so it is read from the job name `<config>-<profile>-a<attempt>`.
-_JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+$")
+_JOB_NAME = re.compile(r"-([a-z0-9]+)-a\d+(?:-delivery-[a-z0-9-]+)?$")
 
 
 def tool_calls(trajectory: dict[str, Any] | None) -> list[tuple[str, str, dict[str, Any], int]]:

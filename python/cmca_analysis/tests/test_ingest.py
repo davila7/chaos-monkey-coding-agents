@@ -129,3 +129,11 @@ def test_join_falls_back_to_position_without_a_matching_hash():
         {"seq": 3, "tool_name": "Bash", "capability": "shell"},
     ]
     assert [c.index if c else None for _, c in join(events, calls)] == [2, 0, 1, None]
+
+
+def test_parse_job_reads_a_delivery_rerun_as_its_original_job():
+    from cmca_analysis.ingest import parse_job
+
+    assert parse_job("pi-claude-heavy-a1-delivery-s-cycle-count") == ("pi-claude", "heavy", 1)
+    assert parse_job("codex-claude-moderate-a2-delivery-n-cache-hitrate") == ("codex-claude", "moderate", 2)
+    assert parse_job("cc-claude-clean-a0") == ("cc-claude", "clean", 0)
