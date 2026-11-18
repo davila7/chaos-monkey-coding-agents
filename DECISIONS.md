@@ -1740,7 +1740,7 @@ Order and PRs: one implementation PR for items 1, 2, 5 and 6's tables; one for i
 
 Alternatives considered:
 
-- Recalibrate the seven tasks now and run their leaderboard trials before the release: about $7 plus roughly 210 leaderboard trials per track pair across ten configs; it delays the release and the paper for tasks the pre-registered rule already excluded, and the added tasks would be a further deviation from the tag.
+- Recalibrate the seven tasks now and run their leaderboard trials before the release: about $7 plus 210 leaderboard trials (7 tasks, five configs on their track, two profiles, n = 3); it delays the release and the paper for tasks the pre-registered rule already excluded, and the added tasks would be a further deviation from the tag.
 - Publish the curve as computed today: `clean` and `moderate` on 37 or 36 tasks next to `light` and `heavy` on 20 is not one curve.
 - Keep the M5 release on the site next to M6: the owner wants all results in one benchmark; M5 stays in `results/` and in its report.
 
