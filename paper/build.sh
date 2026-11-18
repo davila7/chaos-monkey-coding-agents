@@ -2,7 +2,7 @@
 # Builds paper/main.pdf from a release, then the arXiv tarball (sources, .bbl, generated tables).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-release="${1:-results/2026-10-31-m5-codex}"
+release="${1:-results/2026-11-18-m6}"
 cd "$here/.."
 uv run python -m cmca_analysis paper --release "$release" --out paper/generated
 cd "$here"
