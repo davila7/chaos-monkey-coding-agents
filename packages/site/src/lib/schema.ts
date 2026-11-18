@@ -40,6 +40,8 @@ export const Board = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   title: z.string().min(1),
   description: z.string(),
+  /** Tasks behind the degradation curves when the curve profiles ran on a subset (D-0055 item 1). */
+  curve_tasks: z.number().int().positive().nullable().default(null),
   rows: z.array(Row),
 });
 export type Board = z.infer<typeof Board>;
