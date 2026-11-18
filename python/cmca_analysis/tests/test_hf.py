@@ -4,12 +4,14 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-RELEASE = ROOT / "results" / "2026-10-31-m5-codex"
-HF = RELEASE / "hf"
+RELEASES = [ROOT / "results" / "2026-10-31-m5-codex", ROOT / "results" / "2026-11-18-m6"]
 
 
-@pytest.mark.skipif(not HF.exists(), reason="committed hf tables not present")
-def test_committed_tables_match_the_release():
+@pytest.mark.parametrize("release", RELEASES, ids=lambda p: p.name)
+def test_committed_tables_match_the_release(release: Path):
+    RELEASE, HF = release, release / "hf"
+    if not HF.exists():
+        pytest.skip("committed hf tables not present")
     trials = [json.loads(line) for line in (HF / "trials.jsonl").read_text().splitlines()]
     tasks = [json.loads(line) for line in (HF / "tasks.jsonl").read_text().splitlines()]
     meta = json.loads((HF / "meta.json").read_text())

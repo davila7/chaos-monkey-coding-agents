@@ -1,7 +1,8 @@
 """`python -m cmca_analysis paper --release <dir> --out <dir>`: LaTeX numbers and tables from a release.
 
 The paper never types a result. Every value comes from the release's `site-data.json` and
-`<board>/board.json` through the macros and tables written here (D-0050 item 2).
+`<board>/board.json` through the macros and tables written here (D-0050 item 2), and from the
+config `summary.json` files for curves, fault delivery and cost (D-0055 item 4).
 """
 
 import argparse
@@ -10,6 +11,7 @@ import re
 from pathlib import Path
 
 BOARDS = ("track-s", "track-n-fixed")
+CURVE_PROFILES = ("clean", "light", "moderate", "heavy")
 
 # Display names for the paper; a config missing here keeps its id.
 HARNESS_LABELS = {
@@ -59,7 +61,8 @@ def _sorted_rows(rows: list[dict]) -> list[dict]:
     return sorted(rows, key=lambda r: (-r["faulted_counts"]["succeeded"], r["config_id"]))
 
 
-def macros(site: dict, boards: dict[str, dict]) -> dict[str, str]:
+def macros(site: dict, boards: dict[str, dict], summaries: dict[tuple[str, str], dict] | None = None) -> dict[str, str]:
+    summaries = summaries or {}
     out: dict[str, str] = {"cmcaRelease": _escape(site["release"])}
     for board in site["boards"]:
         if board["id"] not in BOARDS:
@@ -76,9 +79,26 @@ def macros(site: dict, boards: dict[str, dict]) -> dict[str, str]:
         out[f"cmca{b}CleanMax"] = _fmt(max(clean))
         out[f"cmca{b}OverclaimMin"] = _fmt(min(overclaim))
         out[f"cmca{b}OverclaimMax"] = _fmt(max(overclaim))
+        leader = _sorted_rows(rows)[0]
+        out[f"cmca{b}Leader"] = _escape(_label(leader))
+        out[f"cmca{b}LeaderSucceeded"] = str(leader["faulted_counts"]["succeeded"])
+        out[f"cmca{b}LeaderSent"] = str(leader["faulted_counts"]["sent"])
+        last = _sorted_rows(rows)[-1]
+        out[f"cmca{b}Last"] = _escape(_label(last))
+        out[f"cmca{b}LastSucceeded"] = str(last["faulted_counts"]["succeeded"])
+        if board.get("curve_tasks"):
+            out[f"cmca{b}CurveTasks"] = str(board["curve_tasks"])
         for r in rows:
             c = b + _macro_part(r["config_id"])
             m = r["metrics"]
+            for p in r.get("curve") or []:
+                out[f"cmca{c}Curve{_macro_part(p['profile'])}"] = _fmt(_value(p["pass1"]))
+            out[f"cmca{c}RR"] = _fmt(_value(m["rr"]))
+            out[f"cmca{c}PassThree"] = _fmt(_value(m["pass3_moderate"]))
+            out[f"cmca{c}Units"] = str(r["trials"])
+            summary = summaries.get((board["id"], r["config_id"]))
+            if summary:
+                out.update(_summary_macros(c, summary))
             out[f"cmca{c}Sent"] = str(r["faulted_counts"]["sent"])
             out[f"cmca{c}Succeeded"] = str(r["faulted_counts"]["succeeded"])
             out[f"cmca{c}Excluded"] = str(r["excluded"])
@@ -87,6 +107,10 @@ def macros(site: dict, boards: dict[str, dict]) -> dict[str, str]:
             out[f"cmca{c}Overclaim"] = _fmt(_value(m["overclaim_rate"]))
             out[f"cmca{c}Poison"] = _fmt(_value(m["poison_propagation_rate"]))
             out[f"cmca{c}DollarsPerSuccess"] = _fmt(m.get("dollars_per_success"))
+        fid_keys = [f"cmca{b}{_macro_part(r['config_id'])}Fidelity" for r in rows]
+        fid = [float(out[k]) for k in fid_keys if out.get(k, "n/a") != "n/a"]
+        if fid:
+            out[f"cmca{b}FidelityMin"] = _fmt(min(fid))
         detail = boards.get(board["id"])
         if detail:
             comps = detail["comparisons"]
@@ -99,6 +123,53 @@ def macros(site: dict, boards: dict[str, dict]) -> dict[str, str]:
                 out[f"cmca{b}MddMin"] = _fmt(min(mdd))
                 out[f"cmca{b}MddMax"] = _fmt(max(mdd))
     return out
+
+
+def _summary_macros(c: str, summary: dict) -> dict[str, str]:
+    """Robustness AUC, fault delivery over every trial directory (replaced originals included) and harness-reported cost."""
+    profiles = summary["profiles"].values()
+    delivered = sum(p["validity"]["delivered"] for p in profiles)
+    verifiable = sum(p["validity"]["delivery_verifiable"] for p in profiles)
+    cost = sum(p["cost_usd_total"] or 0 for p in profiles)
+    return {
+        f"cmca{c}Auc": _fmt(summary.get("robustness_auc")),
+        f"cmca{c}Delivered": str(delivered),
+        f"cmca{c}Verifiable": str(verifiable),
+        f"cmca{c}Fidelity": _fmt(delivered / verifiable if verifiable else None),
+        f"cmca{c}Undeliverable": str(sum(p["validity"].get("faults_undeliverable", 0) for p in profiles)),
+        f"cmca{c}Cost": f"{cost:.2f}",
+    }
+
+
+def curve_figure(board: dict) -> str:
+    """pgfplots axis body: pass^1 against base rate per config, on the curve subset."""
+    rows = [r for r in _sorted_rows(board["rows"]) if r.get("curve")]
+    if not rows:
+        return ""
+    lines = []
+    for i, r in enumerate(rows):
+        pts = " ".join(f"({p['base_rate']:.2f},{_value(p['pass1']):.4f})" for p in r["curve"])
+        lines.append(f"\\addplot+[mark=*, mark size=1.5pt] coordinates {{{pts}}};")
+        lines.append(f"\\addlegendentry{{{_escape(_label(r))}}}")
+    return "\n".join(lines) + "\n"
+
+
+def detail_table(board: dict, summaries: dict[tuple[str, str], dict]) -> str:
+    """Units, exclusions, fault delivery, robustness AUC and harness-reported cost per config."""
+    lines = [
+        r"\begin{tabular}{lrrrrr}",
+        r"\toprule",
+        r"Harness & Units & Excluded & Delivered / verifiable & Robustness AUC & Cost (\$) \\",
+        r"\midrule",
+    ]
+    for r in _sorted_rows(board["rows"]):
+        sm = _summary_macros("x", summaries[(board["id"], r["config_id"])])
+        lines.append(
+            f"{_escape(_label(r))} & {r['trials']} & {r['excluded']} & {sm['cmcaxDelivered']} / {sm['cmcaxVerifiable']} & "
+            f"{sm['cmcaxAuc']} & {sm['cmcaxCost']} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
 
 
 def board_table(board: dict) -> str:
@@ -127,13 +198,22 @@ def render(release: Path) -> dict[str, str]:
         for b in BOARDS
         if (p := release / b / "board.json").exists()
     }
+    summaries = {
+        (b, p.parent.name): json.loads(p.read_text())
+        for b in BOARDS
+        for p in sorted((release / b).glob("*/summary.json"))
+    }
     files: dict[str, str] = {}
     header = f"% Generated by `python -m cmca_analysis paper` from {release.name}. Do not edit.\n"
-    body = "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(macros(site, boards).items()))
+    body = "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(macros(site, boards, summaries).items()))
     files["numbers.tex"] = header + body
     for board in site["boards"]:
         if board["id"] in BOARDS:
             files[f"table-{board['id']}.tex"] = header + board_table(board)
+            if all((board["id"], r["config_id"]) in summaries for r in board["rows"]):
+                files[f"detail-{board['id']}.tex"] = header + detail_table(board, summaries)
+            if fig := curve_figure(board):
+                files[f"curves-{board['id']}.tex"] = header + fig
     return files
 
 
