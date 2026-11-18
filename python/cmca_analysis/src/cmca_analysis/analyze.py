@@ -44,6 +44,7 @@ BOARDS = (
     ),
 )
 CURVE_PROFILES = ("clean", "light", "moderate", "heavy")
+LEADERBOARD_PROFILES = ("clean", "moderate")
 DECIMALS = 4
 
 
@@ -139,7 +140,9 @@ def _profile_summary(
     dsr_n, dsr_dup = m.duplicate_rate(valid, decls)
     costs = [t.cost_usd for t in trials if t.cost_usd is not None]
     return {
-        "trials": len(trials),
+        # One per task and attempt: a delivery rerun counts in place of its original (METHODOLOGY 6).
+        "trials": len({(t.task, t.attempt) for t in trials}),
+        "jobs": len(trials),
         "tasks": len([g for g in valid_groups if g]),
         "pass1": m.pass1(valid_groups),
         "successes": sum(1 for t in valid if t.success),
@@ -178,7 +181,11 @@ def summarize_config(
     }
     boot = bootstrap(units, _boot_stats(decls, profiles), f"{seed}|{board}|{config_id}", replicates)
     rr, delta = m.retention(_groups(units, "clean"), _groups(units, "moderate"))
-    curve_pts = {rates[p]: point[p]["pass1"] for p in CURVE_PROFILES if p in point and p in rates and point[p]["pass1"] is not None}
+    curve = _curve(trials, profiles, rates, f"{seed}|{board}|{config_id}|curve", replicates)
+    if curve:
+        curve_pts = {rates[p]: iv["value"] for p, iv in curve["intervals"].items() if iv is not None}
+    else:
+        curve_pts = {rates[p]: point[p]["pass1"] for p in CURVE_PROFILES if p in point and p in rates and point[p]["pass1"] is not None}
     clean = [t for t in trials if t.profile == "clean" and not t.excluded]
     moderate = [t for t in trials if t.profile == "moderate" and not t.excluded]
     return {
@@ -189,11 +196,62 @@ def summarize_config(
         "intervals": boot,
         "retention": {"rr": rr, "delta": delta},
         "robustness_auc": m.robustness_auc(curve_pts),
+        "curve": curve,
         "cost_inflation": m.cost_inflation(clean, moderate) if clean and moderate else None,
         "tasks": sorted({t.task for t in trials}),
         "trial_links": sorted(t.path for t in trials),
         "trial_problems": {t.path: t.problems for t in sorted(trials, key=lambda t: t.path) if t.problems},
+        "missing_units": missing_units(trials),
     }
+
+
+def _curve(trials: list[Trial], profiles: Sequence[str], rates: dict[str, float], seed: str, replicates: int) -> dict[str, Any] | None:
+    """Curve points on the curve subset only: the tasks run under a curve-only profile (D-0055 item 1).
+
+    Leaderboard profiles cover more tasks than `light` and `heavy`; pooling each profile over its
+    own task set would mix task sets along one curve.
+    """
+    tasks = sorted({t.task for t in trials if t.profile in CURVE_PROFILES and t.profile not in LEADERBOARD_PROFILES})
+    if not tasks:
+        return None
+    subset = _units([t for t in trials if t.task in set(tasks)])
+    stats = {p: (lambda us, p=p: m.pass1(_groups(us, p))) for p in CURVE_PROFILES if p in profiles and p in rates}
+    return {"tasks": tasks, "intervals": bootstrap(subset, stats, seed, replicates)}
+
+
+def missing_units(trials: Sequence[Trial]) -> list[str]:
+    """Task, profile and attempt combinations with no trial, against the tasks and attempts each profile has."""
+    out = []
+    for p in sorted({t.profile for t in trials}):
+        mine = [t for t in trials if t.profile == p]
+        have = {(t.task, t.attempt) for t in mine}
+        for task in sorted({t.task for t in mine}):
+            for a in sorted({t.attempt for t in mine}, key=lambda a: -1 if a is None else a):
+                if (task, a) not in have:
+                    out.append(f"{task}:{p}:a{a}")
+    return out
+
+
+def mark_superseded(trials: Sequence[Trial]) -> None:
+    """A delivery rerun counts in place of every other trial of its unit, whatever the original's later delivery check says.
+
+    The rerun was decided before its outcome was known; letting a corrected check bring the
+    original back would choose between two trials after seeing both.
+    """
+    reruns = {(t.config_id, t.task, t.profile, t.attempt) for t in trials if t.delivery_rerun}
+    for t in trials:
+        if not t.delivery_rerun and (t.config_id, t.task, t.profile, t.attempt) in reruns:
+            t.superseded = True
+
+
+def duplicate_units(trials: Sequence[Trial]) -> list[str]:
+    """Config, task, profile and attempt combinations with more than one counted trial."""
+    seen: dict[tuple[str, str, str, int | None], int] = {}
+    for t in trials:
+        if not t.excluded:
+            k = (t.config_id, t.task, t.profile, t.attempt)
+            seen[k] = seen.get(k, 0) + 1
+    return sorted(f"{c}:{task}:{p}:a{a}" for (c, task, p, a), n in seen.items() if n > 1)
 
 
 def _interval(b: dict[str, Any] | None) -> dict[str, float] | None:
@@ -205,19 +263,25 @@ def site_row(summary: dict[str, Any], config: Config, rates: dict[str, float]) -
     if not iv.get("pass1:moderate") or not iv.get("pass1:clean"):
         return None
     mod = summary["profiles"]["moderate"]
-    curve = [
-        {"profile": p, "base_rate": rates[p], "pass1": _interval(iv[f"pass1:{p}"])}
-        for p in CURVE_PROFILES
-        if iv.get(f"pass1:{p}") and p in rates
-    ]
+    if summary.get("curve"):
+        civ = summary["curve"]["intervals"]
+        curve = [{"profile": p, "base_rate": rates[p], "pass1": _interval(civ[p])} for p in CURVE_PROFILES if civ.get(p)]
+    else:
+        curve = [
+            {"profile": p, "base_rate": rates[p], "pass1": _interval(iv[f"pass1:{p}"])}
+            for p in CURVE_PROFILES
+            if iv.get(f"pass1:{p}") and p in rates
+        ]
     trials = sum(s["trials"] for s in summary["profiles"].values())
-    excluded = sum(s["validity"]["excluded"] for s in summary["profiles"].values())
+    # Units left without a counted trial after reruns (METHODOLOGY 6).
+    excluded = trials - sum(s["valid_trials"] for s in summary["profiles"].values())
     return {
         "config_id": config.id,
         "harness": {"name": config.harness, "version": config.version},
         "model": {"id": config.model, "route": config.route, "reasoning": config.reasoning},
         "axis": "fixed" if "fixed" in config.axes and summary["board"] != "track-n-native" else "native",
         "trials": trials,
+        "jobs": sum(s["jobs"] for s in summary["profiles"].values()),
         "excluded": excluded,
         "metrics": {
             "faulted_success": _interval(iv["pass1:moderate"]),
@@ -231,6 +295,7 @@ def site_row(summary: dict[str, Any], config: Config, rates: dict[str, float]) -
         },
         "faulted_counts": {"succeeded": mod["successes"], "sent": mod["valid_trials"]},
         "curve": curve if len(curve) > 2 else None,
+        "curve_tasks": len(summary["curve"]["tasks"]) if summary.get("curve") else None,
         "trial_links": summary["trial_links"],
     }
 
@@ -309,6 +374,10 @@ def analyze(
             t.problems = validate(t, d)
             analyses[t.path] = analyze_trial(t, decl, rules)
             trials.append(t)
+    mark_superseded(trials)
+    duplicates = duplicate_units(trials)
+    if duplicates:
+        raise ValueError(f"more than one counted trial for: {', '.join(duplicates)}")
 
     boards: dict[str, dict[str, Any]] = {}
     summaries: dict[tuple[str, str], dict[str, Any]] = {}
@@ -345,7 +414,8 @@ def analyze(
         }
         # Native pairs compare vendors' own harness and model; one config is not a pair yet (METHODOLOGY 7).
         if mine and not (board == "track-n-native" and len(rows) < 2):
-            site_boards.append({"id": board, "title": title, "description": description, "rows": rows})
+            curve_tasks = max((r["curve_tasks"] or 0 for r in rows), default=0) or None
+            site_boards.append({"id": board, "title": title, "description": description, "curve_tasks": curve_tasks, "rows": rows})
 
     finished = sorted(t.finished_at for t in trials if t.finished_at)
     site = {

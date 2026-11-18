@@ -14,7 +14,7 @@ from pathlib import Path
 import fixtures_inventory as inv
 from fixtures_multi import number_comments, ticket
 
-TASK = "s-price-revision"
+TASK = "reserve/s-price-revision"
 NOW = "2026-09-14T09:00:00Z"
 WAREHOUSES = ["clearance", "east", "north", "returns", "west"]
 SALES = ("east", "north", "west")

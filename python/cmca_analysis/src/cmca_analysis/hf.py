@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .analyze import load_configs
+from .analyze import load_configs, mark_superseded
 from .classify import analyze_trial
 from .ingest import DATASETS, REPO_ROOT, TaskDecl, load_trial, payload_texts, settled_costs, task_decls, trial_dirs
 from .metrics import dumps
@@ -54,6 +54,7 @@ def trial_rows(release: str, evidence: list[Path], datasets: tuple[Path, ...] | 
     payloads = payload_texts()
     configs = load_configs(configs_dir)
     rows = []
+    loaded = []
     for ev in evidence:
         settled = settled_costs(ev)
         for d in trial_dirs(ev):
@@ -62,6 +63,7 @@ def trial_rows(release: str, evidence: list[Path], datasets: tuple[Path, ...] | 
             reconcile(t, payloads, decl.token, decl.stale)
             t.problems = validate(t, d)
             an = analyze_trial(t, decl, rules)
+            loaded.append(t)
             c = configs.get(t.config_id)
             poison = sum(1 for f in t.faults if f.type == "poison" and f.delivered)
             rows.append({
@@ -100,6 +102,9 @@ def trial_rows(release: str, evidence: list[Path], datasets: tuple[Path, ...] | 
                 "finished_at": t.finished_at,
                 "trial_path": t.path,
             })
+    mark_superseded(loaded)
+    for row, t in zip(rows, loaded):
+        row["excluded"] = t.excluded
     return sorted(rows, key=lambda r: (r["track"], r["config_id"], r["task_id"], r["profile"], r["attempt"] or 0, r["trial_path"]))
 
 

@@ -1745,3 +1745,8 @@ Alternatives considered:
 - Keep the M5 release on the site next to M6: the owner wants all results in one benchmark; M5 stays in `results/` and in its report.
 
 Consequences: the site and the paper read one release built from committed evidence with no new spend. M6 has 37 Track S and 36 Track N tasks; the seven reserve tasks are kept for a later version.
+
+Progress:
+
+- 2026-11-18, items 1, 2, 5 and the tables of item 6: the release build stopped on one unit with two counted trials (`cc-claude` `n-split-reports` `moderate` attempt 2: the D-0054 check reads the original as delivered, and its delivery rerun is also valid). Item 1 gains a rule: a delivery rerun counts in place of every other trial of its unit, whatever a later check says about the original, since the rerun was decided before either outcome was known. `excluded` in `site-data/1` counts units with no counted trial (3 in M6). Release `results/2026-11-18-m6` and report `reports/2026-11-18-m6-release.md`. The seven tasks are in `reserve/`; the Track S fixture generators write their files there and `fixtures.py --check` passes.
+

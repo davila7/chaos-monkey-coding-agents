@@ -196,11 +196,17 @@ class Trial:
     problems: list[str] = field(default_factory=list)
     # Applied faults that never reached the model; not in `faults` (D-0048).
     undeliverable: list[Fault] = field(default_factory=list)
+    # A delivery rerun exists for this trial's config, task, profile and attempt (D-0055 item 1).
+    superseded: bool = False
 
     @property
     def excluded(self) -> bool:
-        """Infrastructure failure, or an applied fault the trajectory shows was not delivered (rerun, METHODOLOGY 6)."""
-        return self.reward is None or any(f.delivered is False for f in self.faults)
+        """Infrastructure failure, an applied fault the trajectory shows was not delivered (rerun, METHODOLOGY 6), or a trial its delivery rerun replaces."""
+        return self.reward is None or self.superseded or any(f.delivered is False for f in self.faults)
+
+    @property
+    def delivery_rerun(self) -> bool:
+        return "-delivery-" in self.job
 
     @property
     def success(self) -> bool | None:
