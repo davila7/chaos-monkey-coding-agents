@@ -214,7 +214,7 @@ def validity(trials: Sequence[Trial]) -> dict[str, Any]:
         "infra_failure_rate": len(infra) / n if n else None,
         "budget_exhausted": len(budget),
         "budget_exhaustion_rate": len(budget) / n if n else None,
-        "undelivered": sum(1 for t in trials if t.reward is not None and t.excluded),
+        "undelivered": sum(1 for t in trials if t.reward is not None and any(f.delivered is False for f in t.faults)),
         # A rerun replaces an excluded trial when a valid trial exists for its task, profile and attempt.
         "replaced": sum(1 for t in trials if t.excluded and _slot(t) in valid_slots),
         "excluded": sum(1 for t in trials if t.excluded and _slot(t) not in valid_slots),

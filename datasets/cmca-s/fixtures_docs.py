@@ -619,11 +619,11 @@ def batch1_outputs(root: Path, canary: str, client: str) -> dict[Path, str]:
     files[root / "s-pagination-client/environment/docs/fixture.json"] = dump(f)
     files[root / "s-pagination-client/variants/doc.json"] = dumps_variant(p["variant"])
     f, e, p, visible = webhook_signature()
-    files[root / "s-webhook-signature/environment/docs/fixture.json"] = dump(f)
-    files[root / "s-webhook-signature/tests/expected.json"] = dump({"_canary": f"canary GUID {canary}", **e})
-    files[root / "s-webhook-signature/variants/doc.json"] = dumps_variant(p["variant"])
-    files[root / "s-webhook-signature/environment/app/tests/test_signature.py"] = visible
-    for task in ("s-pagination-client", "s-webhook-signature"):
+    files[root / "reserve/s-webhook-signature/environment/docs/fixture.json"] = dump(f)
+    files[root / "reserve/s-webhook-signature/tests/expected.json"] = dump({"_canary": f"canary GUID {canary}", **e})
+    files[root / "reserve/s-webhook-signature/variants/doc.json"] = dumps_variant(p["variant"])
+    files[root / "reserve/s-webhook-signature/environment/app/tests/test_signature.py"] = visible
+    for task in ("s-pagination-client", "reserve/s-webhook-signature"):
         files[root / task / "solution/oracle_client.py"] = client
         files[root / task / "solution/oracle_docs.py"] = helper
     return files
