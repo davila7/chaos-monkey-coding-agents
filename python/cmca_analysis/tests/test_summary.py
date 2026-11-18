@@ -306,3 +306,10 @@ def test_claude_code_delivery_reads_the_result_the_model_received():
     _, calls = trajectory_steps({"steps": [step]})
     assert calls[0].observation == rendered and calls[0].seen == "Exit code 1"
     assert delivered("empty", calls[0].seen, "", None)
+
+
+def test_profile_of_a_track_s_delivery_rerun_comes_from_its_job_name():
+    from cmca_analysis.trials import _profile
+
+    assert _profile({}, "opencode-claude-light-a0-delivery-s-category-audit") == "light"
+    assert _profile({}, "opencode-claude-light-a0") == "light"

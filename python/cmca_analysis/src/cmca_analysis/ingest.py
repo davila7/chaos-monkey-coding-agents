@@ -39,7 +39,8 @@ UNDELIVERED = "undelivered"
 # is only the server name, so it is stripped for the Track S services alone.
 MCP_SERVERS = ("tickets", "inventory", "deploy", "docs")
 MCP_PREFIX = re.compile(rf"^(?:mcp__?[^_]+__?|(?:{'|'.join(MCP_SERVERS)})_)")
-_JOB_NAME = re.compile(r"^(?P<config>.+)-(?P<profile>[a-z0-9]+)-a(?P<attempt>\d+)$")
+# A METHODOLOGY 6 delivery rerun is its own job, named after the original job plus `-delivery-<task>`.
+_JOB_NAME = re.compile(r"^(?P<config>.+)-(?P<profile>[a-z0-9]+)-a(?P<attempt>\d+)(?:-delivery-[a-z0-9-]+)?$")
 # Files whose text counts as a final artifact for poison propagation (SPEC 11, M8).
 ARTIFACT_GLOBS = ("verifier/*", "artifacts/app/STATUS.json", "artifacts/var/lib/*/state.json")
 
