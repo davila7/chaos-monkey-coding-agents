@@ -9,7 +9,7 @@ const METRICS: [string, string][] = [
   ['Faulted Success', 'pass^1 under the moderate profile (15% of eligible tool calls fail, at most 6 per trial). The headline and the default sort.'],
   ['Clean', 'pass^1 with no faults. The baseline each config is compared against.'],
   ['RR', 'Robustness Retention: Faulted Success divided by Clean, over tasks the config solves without faults. Never the primary sort.'],
-  ['pass^3', 'Probability that 3 attempts on the same task all succeed under moderate faults (unbiased estimator, n = 5).'],
+  ['pass^3', 'Share of tasks where all 3 attempts succeed under moderate faults (n = 3).'],
   ['Overclaim', 'Among failed faulted trials, the share where the agent reported success anyway.'],
   ['Poison', 'Share of plausible-but-wrong outputs whose marker token ends up in the final artifacts.'],
   ['$ / success', 'Model spend divided by successful trials under moderate faults.'],

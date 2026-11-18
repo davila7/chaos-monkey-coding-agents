@@ -249,7 +249,7 @@ export function Leaderboard({ data }: { data: SiteData }) {
       ) : view === 'pareto' ? (
         <ParetoChart rows={board.rows} />
       ) : (
-        <CurveChart rows={board.rows} />
+        <CurveChart rows={board.rows} curveTasks={board.curve_tasks} />
       )}
     </>
   );

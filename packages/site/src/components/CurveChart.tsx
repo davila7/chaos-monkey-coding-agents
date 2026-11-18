@@ -6,7 +6,7 @@ const W = 960;
 const H = 420;
 const M = { l: 56, r: 24, t: 20, b: 44 };
 
-export function CurveChart({ rows }: { rows: Row[] }) {
+export function CurveChart({ rows, curveTasks }: { rows: Row[]; curveTasks?: number | null }) {
   const series = rows.map((r, i) => ({ r, i, pts: r.curve ?? [] })).filter((s) => s.pts.length > 0);
   if (series.length === 0) return <div className="chart empty">No degradation curve data for this board.</div>;
 
@@ -60,6 +60,7 @@ export function CurveChart({ rows }: { rows: Row[] }) {
           );
         })}
       </svg>
+      {curveTasks && <p className="sub">pass^1 under each profile on the same {curveTasks} tasks, the subset that ran every profile.</p>}
       <div className="legend">
         {series.map(({ r, i }) => (
           <span key={r.config_id}>
