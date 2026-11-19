@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Paper audit revision (D-0056): revised paper text and generated tables, status per finding in `reports/2026-11-19-paper-audit.md`.
+- Open-source readiness (D-0057): results site moves to https://www.chaos-monkey.tech; README with M6 results, a quickstart without an API key and the release reproduction command; `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CODEOWNERS`; harness and task sections in `CONTRIBUTING.md`; harness request issue form and pull request template.
+
+## m6-2026-11-18 (2026-11-18)
+
+First public release. Tag `m6-2026-11-18`; release data in `results/2026-11-18-m6`. Entries cover M0 to M6.
+
+
 - M0 foundations: fault engine, catalog v1, profiles, schemas, `tt-decide`, banned-word and canary lint, event log validation, CI, verification register.
 - M1 (in progress): native injectors for Claude Code 2.1.289, Pi 1.0.3 and OpenCode 1.18.35 (OpenCode on the v1 hooks, D-0019); conformance runner (D-0020) and capability files with parity gaps (D-0017); Harbor custom agents.
 - Track N: 3 pilot tasks (D-0021), recalibrated under D-0023, D-0024 and D-0026; trial planner and run summary.

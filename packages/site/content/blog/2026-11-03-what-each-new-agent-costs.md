@@ -10,7 +10,7 @@ Every number here comes from a committed report, `summary.json` or `DECISIONS.md
 
 ## Where it stands
 
-Six agents have run the benchmark tasks: Claude Code, OpenCode, Pi, Codex, fx and Muse Code. The first five use Claude Sonnet 5.5 and are on the [results site](https://chaos-monkey-coding-agents.vercel.app). Each published row is 144 trials: 12 tasks per track, the `clean` and `moderate` profiles, three attempts each.
+Six agents have run the benchmark tasks: Claude Code, OpenCode, Pi, Codex, fx and Muse Code. The first five use Claude Sonnet 5.5 and are on the [results site](https://www.chaos-monkey.tech). Each published row is 144 trials: 12 tasks per track, the `clean` and `moderate` profiles, three attempts each.
 
 Track S, tasks completed under faults:
 

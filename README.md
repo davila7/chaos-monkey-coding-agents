@@ -4,39 +4,70 @@
 
 # Chaos Monkey for Coding Agents
 
+[![ci](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/ci.yml)
+[![paper](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml/badge.svg)](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml)
+[![Code license: Apache-2.0](https://img.shields.io/badge/code-Apache--2.0-blue)](LICENSE)
+[![Data license: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey)](LICENSE-DATA)
+[![Dataset on Hugging Face](https://img.shields.io/badge/dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents)
+
 How coding-agent harnesses recover when their tools fail. A fault-injection benchmark.
 
-CMCA injects seeded faults into tool calls at two layers: an MCP proxy in front of mock services (Track S) and each harness's own built-in tools (Track N). It measures task success under faults, recovery behavior, the cost of recovery, and whether the agent reports its outcome honestly. The full design is in [SPEC.md](SPEC.md).
+CMCA injects seeded faults into tool calls at two layers: an MCP proxy in front of mock services (Track S) and each harness's own built-in tools (Track N). It measures task success under faults, recovery behavior, the cost of recovery, and whether the agent reports its outcome honestly. The full design is in [SPEC.md](SPEC.md) and the method in [METHODOLOGY.md](METHODOLOGY.md).
 
-Results and build log: [chaos-monkey-coding-agents.vercel.app](https://chaos-monkey-coding-agents.vercel.app) (source in `packages/site`).
+Results site: [www.chaos-monkey.tech](https://www.chaos-monkey.tech) (source in `packages/site`). Data: [Hugging Face](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents).
 
 ## Results
 
-First results (M5, 504 trials, 2026-10-20): [report](reports/2026-10-20-m5-pilot.md), boards in [results/2026-10-20-m5](results/2026-10-20-m5), live on the [site](https://chaos-monkey-coding-agents.vercel.app). All configs use `claude-sonnet-5-5` with reasoning effort `medium`.
+Current release: M6, tag `m6-2026-11-18`, data in [results/2026-11-18-m6](results/2026-11-18-m6), report [reports/2026-11-18-m6-release.md](reports/2026-11-18-m6-release.md). 3,011 trials, 37 Track S and 36 Track N tasks. Every config uses `claude-sonnet-5-5` with reasoning effort `medium`.
 
-Track S, tasks completed under the `moderate` fault profile (12 tasks x 3 attempts = 36 sent):
+Tasks completed under the `moderate` fault profile (37 or 36 tasks x 3 attempts sent per config):
 
-| Harness | Completed | Faulted Success |
+| Track S (MCP services) | Completed | Faulted Success |
 |---|---|---|
-| fx 0.0.13 | 25 / 36 | 69.4% |
-| OpenCode 1.18.35 | 25 / 36 | 69.4% |
-| Pi 1.0.3 | 24 / 36 | 66.7% |
-| Claude Code 2.1.289 | 21 / 36 | 58.3% |
+| fx 0.0.13 | 83 / 111 | 74.8% |
+| Pi 1.0.3 | 77 / 111 | 69.4% |
+| Codex 0.163.0 | 75 / 111 | 67.6% |
+| OpenCode 1.18.35 | 73 / 111 | 65.8% |
+| Claude Code 2.1.289 | 69 / 111 | 62.2% |
 
-fx and OpenCode lead Track S. On Track N (built-in tools) Claude Code leads with 0.833 Faulted Success, then OpenCode 0.806 and Pi 0.722. Intervals, retention, overclaim, poison propagation and cost per success are in the report.
+| Track N (built-in tools) | Completed | Faulted Success |
+|---|---|---|
+| fxh 0.0.13-h1 | 95 / 108 | 88.0% |
+| Codex 0.163.0 | 92 / 108 | 85.2% |
+| OpenCode 1.18.35 | 90 / 108 | 83.3% |
+| Pi 1.0.3 | 89 / 108 | 82.4% |
+| Claude Code 2.1.289 | 87 / 107 | 81.5% |
 
-## Status
+fx leads Track S and fxh leads Track N. fxh is a fork of fx with tool hooks ([davila7/fxh](https://github.com/davila7/fxh), D-0040), because fx 0.0.13 cannot intercept its built-in tools ([V-22](docs/verification/V-22.md)). Claude Code on Track N counts 107 units: one unit has no counted trial (report section 3). Intervals, degradation curves, retention, overclaim and cost per success are in the report and on the site. Earlier releases stay in `results/2026-10-20-m5` and `results/2026-10-31-m5-codex`.
 
-- **M5 (first results): done.** Track S: 4 harnesses (Claude Code, fx, Pi, OpenCode). Track N: 3 harnesses (Claude Code, Pi, OpenCode); fx 0.0.13 cannot intercept its built-in tools ([V-22](docs/verification/V-22.md)). Track N injection fidelity was 95.1%, below the 99% bar (report section 3).
-- **fxh, a fork of fx with tool hooks** ([davila7/fxh](https://github.com/davila7/fxh), D-0040). It passes conformance on all 6 fault types ([V-27](docs/verification/V-27.md), `capabilities/fxh@0.0.13-h1.json`). Track N pilot, 72 trials: Faulted Success 0.806, 114 of 114 verifiable faults delivered, overclaim 1.000, cost 1.48 times Claude Code ([report](reports/2026-10-21-fxh-n-pilot.md)). It joins the boards in M6.
-- **Failed shell commands (D-0042).** The Track N fidelity misses had one cause: the Claude Code and Pi injectors returned failed shell commands unchanged. Both injectors are fixed, and the `probe-shell-fail` conformance probe is ready; its runs with the model are pending.
-- **M6 task suite (D-0043): in progress.** Target 40 tasks per track plus a private holdout, validated with `oracle` and `nop` (no model calls). On `main`: 12 Track N and 12 Track S tasks. Batch 1 (14 more, 7 per track) is in review. The M6 budget is not decided yet.
+## Quickstart
 
-Decisions are in [DECISIONS.md](DECISIONS.md); verification evidence for third-party behavior is in [docs/verification](docs/verification).
+Requirements: Docker, Node 24 (22.12 or later works), pnpm 10, uv. No API key: the `oracle` agent runs the reference solution and `nop` does nothing, so a task is valid when the oracle scores 1 and `nop` scores 0.
+
+```bash
+git clone https://github.com/davila7/chaos-monkey-coding-agents && cd chaos-monkey-coding-agents
+pnpm install --frozen-lockfile && pnpm build
+uv sync --all-packages --locked
+
+# Track N: one task, oracle and nop
+uv run python -m cmca_harbor.validate --dataset datasets/cmca-n --task n-access-rules --out jobs/quickstart-n
+
+# Track S: build the gateway and mock service images, then the oracle under every fault profile
+scripts/service-images.sh
+uv run python -m cmca_harbor.validate --dataset datasets/cmca-s --task s-followups --out jobs/quickstart-s
+```
+
+Each run writes `summary.json` with the reward per job. Runs with a model need a key and an approved cost estimate (SPEC 20).
+
+## Reproducing the release
+
+The boards are computed from committed trial evidence, with no model calls. From `python/cmca_analysis`, the command in section 1 of the [release report](reports/2026-11-18-m6-release.md) rebuilds `results/2026-11-18-m6`; the analysis is deterministic for the same evidence and seed (SPEC 9.7). Trial directories, including trajectories and injector event logs, are under `results/pilot/`.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) covers checks, task versions, adding a harness and task bugs. Security and safety findings go through [SECURITY.md](SECURITY.md). Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Decisions are in [DECISIONS.md](DECISIONS.md), releases and errata in [CHANGELOG.md](CHANGELOG.md), and verification evidence for third-party behavior in [docs/verification](docs/verification). The task datasheet is [DATASHEET.md](DATASHEET.md).
 
 ## Development
-
-Requirements: Node 24 (22.12 or later works locally), pnpm 10, uv.
 
 ```bash
 pnpm install
@@ -53,7 +84,8 @@ Layout:
 | Path | Contents |
 |---|---|
 | `packages/fault-engine` | Fault schedule, trial state store, catalog, schemas, `tt-decide` CLI |
-| `packages/injector-claude-code`, `injector-pi`, `injector-opencode`, `injector-fxh` | Native injectors for Track N |
+| `packages/injector-claude-code`, `injector-codex`, `injector-fxh`, `injector-opencode`, `injector-pi`, `injector-muse` | Native injectors for Track N |
+| `packages/responses-bridge` | Responses API to Messages API bridge for Codex on Claude (D-0044) |
 | `packages/mcp-fault-proxy`, `packages/mock-services` | Track S fault proxy and mock services |
 | `packages/cli` | `cmca` CLI (`lint`, `task-bump`, `analyze`) |
 | `packages/site` | Results site (Next.js static export for Vercel) |
@@ -66,6 +98,20 @@ Layout:
 | `results/` | Conformance, task validation, calibration, smoke, pilot and release evidence |
 | `reports/` | Run reports |
 | `docs/verification/` | Evidence for third-party behavior |
+
+## Citation
+
+Use [CITATION.cff](CITATION.cff) (GitHub shows "Cite this repository"):
+
+```bibtex
+@software{avila_arias_cmca_2026,
+  author  = {\'{A}vila Arias, Daniel},
+  title   = {Chaos Monkey for Coding Agents},
+  year    = {2026},
+  version = {m6-2026-11-18},
+  url     = {https://github.com/davila7/chaos-monkey-coding-agents}
+}
+```
 
 ## Affiliations
 
