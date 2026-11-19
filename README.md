@@ -8,6 +8,7 @@
 [![paper](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml/badge.svg)](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml)
 [![Code license: Apache-2.0](https://img.shields.io/badge/code-Apache--2.0-blue)](LICENSE)
 [![Data license: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey)](LICENSE-DATA)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24378462.svg)](https://doi.org/10.5281/zenodo.24378462)
 [![Dataset on Hugging Face](https://img.shields.io/badge/dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents)
 
 How coding-agent harnesses recover when their tools fail. A fault-injection benchmark.
@@ -109,6 +110,7 @@ Use [CITATION.cff](CITATION.cff) (GitHub shows "Cite this repository"):
   title   = {Chaos Monkey for Coding Agents},
   year    = {2026},
   version = {m6-2026-11-18},
+  doi     = {10.5281/zenodo.24378462},
   url     = {https://github.com/davila7/chaos-monkey-coding-agents}
 }
 ```
