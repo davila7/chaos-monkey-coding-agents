@@ -29,7 +29,7 @@ export function ogImage(title: string): ImageResponse {
       <div style={{ display: 'flex', width: '100%', height: '100%', position: 'relative', fontFamily: 'JetBrains Mono' }}>
         <img src={scene} width={OG_SIZE.width} height={OG_SIZE.height} style={{ position: 'absolute', top: 0, left: 0 }} />
         <div style={{ display: 'flex', flexDirection: 'column', position: 'absolute', top: 64, left: 64, width: 600 }}>
-          <div style={{ fontSize: 22, color: '#ff6a14', letterSpacing: 2 }}>CHAOS MONKEY FOR CODING AGENTS</div>
+          <div style={{ fontSize: 22, color: '#ff6a14', letterSpacing: 2 }}>CHAOS MONKEY CODING AGENT BENCHMARK</div>
           <div style={{ marginTop: 28, fontSize: titleSize(title), lineHeight: 1.05, color: '#f5f0e8' }}>{title}</div>
         </div>
       </div>

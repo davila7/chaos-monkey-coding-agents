@@ -24,7 +24,7 @@ export default function Home() {
 
       <main className="wrap">
         <header className="hero">
-          <div className="banner" role="img" aria-label="Chaos Monkey: Agent Benchmark">
+          <div className="banner" role="img" aria-label="Chaos Monkey Coding Agent Benchmark">
             <img className="mark" src="/monkey.svg" alt="" width={700} height={724} />
             <img className="title" src="/banner-text.png" alt="" width={1472} height={724} />
           </div>

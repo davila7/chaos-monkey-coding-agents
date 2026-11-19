@@ -6,7 +6,7 @@ import { pct, usd } from '@/lib/format';
 import { REPO, SPEC } from '@/lib/links';
 import { callRange, smokeRuns, totalFaults, type SmokeRun } from '@/lib/smoke';
 
-export const metadata: Metadata = { title: 'Smoke runs | Chaos Monkey for Coding Agents' };
+export const metadata: Metadata = { title: 'Smoke runs | Chaos Monkey Coding Agent Benchmark' };
 
 /** SPEC 10.3: a task needs at least this many eligible calls in clean pilot runs. */
 const EXPOSURE_FLOOR = 8;

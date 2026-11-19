@@ -4,7 +4,7 @@ import { SiteNav } from '@/components/SiteNav';
 import { type Cell, VERIFICATION_REF, grid, loadCapabilities } from '@/lib/capabilities';
 import { REPO, SPEC } from '@/lib/links';
 
-export const metadata: Metadata = { title: 'Capabilities | Chaos Monkey for Coding Agents' };
+export const metadata: Metadata = { title: 'Capabilities | Chaos Monkey Coding Agent Benchmark' };
 
 const CRASH: Record<string, string> = {
   fail_open: 'fail open: with an injector build that throws on load, the probe shell call returned its real output',
