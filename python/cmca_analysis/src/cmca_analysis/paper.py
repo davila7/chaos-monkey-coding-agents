@@ -159,7 +159,7 @@ def detail_table(board: dict, summaries: dict[tuple[str, str], dict]) -> str:
     lines = [
         r"\begin{tabular}{lrrrrr}",
         r"\toprule",
-        r"Harness & Units & Excluded & Delivered / verifiable & Robustness AUC & Cost (\$) \\",
+        r"Harness & Scheduled units & No counted trial & Delivered / verifiable & Robustness AUC & Cost (\$) \\",
         r"\midrule",
     ]
     for r in _sorted_rows(board["rows"]):
@@ -176,7 +176,7 @@ def board_table(board: dict) -> str:
     lines = [
         r"\begin{tabular}{lrrlrrr}",
         r"\toprule",
-        r"Harness & Completed & Clean pass\textasciicircum1 & Faulted Success [95\% CI] & Overclaim & Poison prop. & \$ per success \\",
+        r"Harness & Completed & Clean pass\textsuperscript{1} & Faulted Success [95\% CI] & Overclaim & Poison prop. & \$ per success \\",
         r"\midrule",
     ]
     for r in _sorted_rows(board["rows"]):
@@ -189,6 +189,167 @@ def board_table(board: dict) -> str:
         )
     lines += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(lines) + "\n"
+
+
+OUTCOMES = ("retry_same", "retry_modified", "reroute", "ack_only", "ignore", "abandon")
+ROUTE_LABELS = {"anthropic-api": "Anthropic API", "vercel-ai-gateway": "Vercel AI Gateway"}
+
+
+def _ratio(k: int, n: int) -> str:
+    return f"{k}/{n}" if n else "n/a"
+
+
+def _pct_interval(summary: dict, key: str) -> str:
+    iv = summary["intervals"].get(key)
+    if not iv or iv.get("value") is None:
+        return "n/a"
+    return f"{iv['value']:.2f} [{iv['lo']:.2f}, {iv['hi']:.2f}]"
+
+
+def config_table(site: dict) -> str:
+    """Harness, version, model and route per config, read from the release rows (not typed)."""
+    seen: dict[str, dict] = {}
+    tracks: dict[str, list[str]] = {}
+    for board in site["boards"]:
+        if board["id"] not in BOARDS:
+            continue
+        for r in board["rows"]:
+            seen.setdefault(r["config_id"], r)
+            tracks.setdefault(r["config_id"], []).append("S" if board["id"] == "track-s" else "N")
+    lines = [
+        r"\begin{tabular}{llllll}",
+        r"\toprule",
+        r"Config & Harness & Version & Model (reasoning) & Model route & Tracks \\",
+        r"\midrule",
+    ]
+    for cid in sorted(seen):
+        r = seen[cid]
+        route = ROUTE_LABELS.get(r["model"]["route"], r["model"]["route"])
+        lines.append(
+            f"\\code{{{_escape(cid)}}} & {_escape(_label(r))} & {_escape(r['harness']['version'])} & "
+            f"\\code{{{_escape(r['model']['id'])}}} ({_escape(r['model']['reasoning'])}) & {_escape(route)} & {', '.join(tracks[cid])} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
+def honesty_table(board: dict, summaries: dict[tuple[str, str], dict]) -> str:
+    """Moderate profile: overclaim and poison with numerators, denominators and bootstrap intervals."""
+    lines = [
+        r"\begin{tabular}{lrlrrlr}",
+        r"\toprule",
+        r"Harness & Failed with fault & Overclaim [95\% CI] & No report & Poison delivered & Poison prop. [95\% CI] & pass\textsuperscript{3} \\",
+        r"\midrule",
+    ]
+    for r in _sorted_rows(board["rows"]):
+        s = summaries[(board["id"], r["config_id"])]
+        m = s["profiles"]["moderate"]
+        rep, poi = m["report"], m["poison"]
+        k = round((rep["overclaim"] or 0) * rep["faulted_failed"])
+        nr = round((rep["no_report"] or 0) * rep["faulted_failed"])
+        lines.append(
+            f"{_escape(_label(r))} & {rep['faulted_failed']} & {k}/{rep['faulted_failed']}: {_pct_interval(s, 'overclaim:moderate')} & {nr} & "
+            f"{poi['delivered']} & {poi['propagated']}/{poi['delivered']}: {_pct_interval(s, 'poison:moderate')} & {_fmt(m.get('pass3'))} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
+def exposure_table(board: dict, summaries: dict[tuple[str, str], dict]) -> str:
+    """Moderate profile: faults applied, verifiable and delivered, per trial and per type family."""
+    lines = [
+        r"\begin{tabular}{lrrrrrr}",
+        r"\toprule",
+        r"Harness & Trials & Applied & Applied/trial & Verifiable & Delivered & Not verifiable \\",
+        r"\midrule",
+    ]
+    for r in _sorted_rows(board["rows"]):
+        m = summaries[(board["id"], r["config_id"])]["profiles"]["moderate"]
+        v = m["validity"]
+        applied = v["faults_applied"]
+        lines.append(
+            f"{_escape(_label(r))} & {v['trials']} & {applied} & {applied / v['trials']:.2f} & {v['delivery_verifiable']} & "
+            f"{v['delivered']} & {applied - v['delivery_verifiable']} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
+def outcomes_table(board: dict, summaries: dict[tuple[str, str], dict]) -> str:
+    """Moderate profile: what the agent did within five steps of each classified fault, as shares, plus paired cost ratios."""
+    head = " & ".join(o.replace("_", r"\_") for o in OUTCOMES)
+    lines = [
+        r"\begin{tabular}{lr" + "r" * len(OUTCOMES) + "rrr}",
+        r"\toprule",
+        f"Harness & Events & {head} & Dup. side effect & Tokens ratio & Steps ratio \\\\",
+        r"\midrule",
+    ]
+    for r in _sorted_rows(board["rows"]):
+        s = summaries[(board["id"], r["config_id"])]
+        m = s["profiles"]["moderate"]
+        out = m["outcomes"]
+        n = sum(out.get(o, 0) for o in OUTCOMES)
+        shares = " & ".join(f"{out.get(o, 0) / n:.2f}" if n else "n/a" for o in OUTCOMES)
+        dup = m["duplicate_side_effect"]
+        ci = s.get("cost_inflation") or {}
+        tok = ci.get("tokens", {}).get("median")
+        stp = ci.get("steps", {}).get("median")
+        lines.append(
+            f"{_escape(_label(r))} & {n} & {shares} & {_ratio(dup['duplicated'], dup['trials'])} & {_fmt(tok, 2)} & {_fmt(stp, 2)} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(lines) + "\n"
+
+
+def run_macros(release: Path, site: dict, summaries: dict[tuple[str, str], dict], boards: dict[str, dict]) -> dict[str, str]:
+    """Release-wide counts: trial directories, scheduled units, outcome shares and power."""
+    out: dict[str, str] = {}
+    meta_path = release / "hf" / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text())
+        out["cmcaTrialDirs"] = f"{meta['trials']:,}"
+        out["cmcaTaskCount"] = str(meta["tasks"])
+    units = sum(r["trials"] for b in site["boards"] if b["id"] in BOARDS for r in b["rows"])
+    out["cmcaUnits"] = f"{units:,}"
+    overclaim = [v for b in site["boards"] if b["id"] in BOARDS for r in b["rows"]
+                 if (v := _value(r["metrics"]["overclaim_rate"])) is not None]
+    if overclaim:
+        out["cmcaOverclaimPctMin"] = f"{round(100 * min(overclaim))}\\%"
+        out["cmcaOverclaimPctMax"] = f"{round(100 * max(overclaim))}\\%"
+    for bid, detail in boards.items():
+        b = _macro_part(bid)
+        comps = detail["comparisons"]
+        top = max(comps, key=lambda x: abs(x["mean_difference"]))
+        out[f"cmca{b}MaxDifferenceP"] = _fmt(top["p"], 3)
+        out[f"cmca{b}Pairs"] = str(len(comps))
+        needed = [x["power"]["tasks_needed"]["3"] for x in comps if x.get("power")]
+        if needed:
+            out[f"cmca{b}TasksNeededMin"] = str(min(needed))
+            out[f"cmca{b}TasksNeededMax"] = str(max(needed))
+        rows = [summaries[(bid, c)]["profiles"]["moderate"] for c in detail["configs"] if (bid, c) in summaries]
+        tot = {o: sum(m["outcomes"].get(o, 0) for m in rows) for o in OUTCOMES}
+        n = sum(tot.values())
+        if n:
+            out[f"cmca{b}Events"] = str(n)
+            out[f"cmca{b}RetryShare"] = f"{round(100 * (tot['retry_same'] + tot['retry_modified']) / n)}\\%"
+            out[f"cmca{b}RerouteShare"] = f"{round(100 * tot['reroute'] / n)}\\%"
+            out[f"cmca{b}PassiveShare"] = f"{round(100 * (tot['ack_only'] + tot['ignore'] + tot['abandon']) / n)}\\%"
+        per_trial = {c: summaries[(bid, c)]["profiles"]["moderate"]["validity"] for c in detail["configs"] if (bid, c) in summaries}
+        if per_trial:
+            rate = {c: v["faults_applied"] / v["trials"] for c, v in per_trial.items() if v["trials"]}
+            hi, lo = max(rate, key=rate.get), min(rate, key=rate.get)
+            labels = {r["config_id"]: _label(r) for bd in site["boards"] if bd["id"] == bid for r in bd["rows"]}
+            out[f"cmca{b}ExposureMaxLabel"] = _escape(labels.get(hi, hi))
+            out[f"cmca{b}ExposureMinLabel"] = _escape(labels.get(lo, lo))
+            out[f"cmca{b}ExposureRatio"] = f"{rate[hi] / rate[lo]:.1f}"
+            failed = [m["report"]["faulted_failed"] for m in rows]
+            out[f"cmca{b}FailedWithFaultMin"] = str(min(failed))
+            out[f"cmca{b}FailedWithFaultMax"] = str(max(failed))
+        applied = sum(m["validity"]["faults_applied"] for m in rows)
+        verifiable = sum(m["validity"]["delivery_verifiable"] for m in rows)
+        if applied:
+            out[f"cmca{b}VerifiableShare"] = f"{round(100 * verifiable / applied)}\\%"
+    return out
 
 
 def render(release: Path) -> dict[str, str]:
@@ -205,13 +366,22 @@ def render(release: Path) -> dict[str, str]:
     }
     files: dict[str, str] = {}
     header = f"% Generated by `python -m cmca_analysis paper` from {release.name}. Do not edit.\n"
-    body = "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(macros(site, boards, summaries).items()))
+    all_macros = macros(site, boards, summaries)
+    if all(b in boards for b in BOARDS) and summaries:
+        all_macros.update(run_macros(release, site, summaries, boards))
+    body = "".join(f"\\newcommand{{\\{k}}}{{{v}}}\n" for k, v in sorted(all_macros.items()))
     files["numbers.tex"] = header + body
+    if all(b in boards for b in BOARDS) and summaries:
+        files["configs.tex"] = header + config_table(site)
     for board in site["boards"]:
         if board["id"] in BOARDS:
             files[f"table-{board['id']}.tex"] = header + board_table(board)
             if all((board["id"], r["config_id"]) in summaries for r in board["rows"]):
                 files[f"detail-{board['id']}.tex"] = header + detail_table(board, summaries)
+                if all("intervals" in summaries[(board["id"], r["config_id"])] for r in board["rows"]):
+                    files[f"honesty-{board['id']}.tex"] = header + honesty_table(board, summaries)
+                    files[f"exposure-{board['id']}.tex"] = header + exposure_table(board, summaries)
+                    files[f"outcomes-{board['id']}.tex"] = header + outcomes_table(board, summaries)
             if fig := curve_figure(board):
                 files[f"curves-{board['id']}.tex"] = header + fig
     return files
