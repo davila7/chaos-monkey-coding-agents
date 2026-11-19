@@ -5,7 +5,7 @@ import './globals.css';
 import { FlameFavicon } from '@/components/FlameFavicon';
 import { ogImageMeta } from '@/lib/og';
 
-const TITLE = 'Chaos Monkey for Coding Agents';
+const TITLE = 'Chaos Monkey Coding Agent Benchmark';
 const DESCRIPTION = 'How coding-agent harnesses recover when their tools fail.';
 
 export const metadata: Metadata = {

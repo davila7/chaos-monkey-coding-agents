@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { SiteNav } from '@/components/SiteNav';
 import { formatDate, loadPosts } from '@/lib/blog';
 
-export const metadata: Metadata = { title: 'Blog | Chaos Monkey for Coding Agents' };
+export const metadata: Metadata = { title: 'Blog | Chaos Monkey Coding Agent Benchmark' };
 
 export default function BlogIndex() {
   const posts = loadPosts();

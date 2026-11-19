@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!post) return {};
   const images = ogImageMeta(`/blog/${post.slug}/og.png`);
   return {
-    title: `${post.title} | Chaos Monkey for Coding Agents`,
+    title: `${post.title} | Chaos Monkey Coding Agent Benchmark`,
     description: post.summary,
     openGraph: { type: 'article', title: post.title, description: post.summary, url: `/blog/${post.slug}/`, publishedTime: post.date, images },
     twitter: { card: 'summary_large_image', title: post.title, description: post.summary, images },
