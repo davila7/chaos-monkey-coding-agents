@@ -7,7 +7,7 @@
 
 ## m6-2026-11-18 (2026-11-18)
 
-First public release. Tag `m6-2026-11-18`; release data in `results/2026-11-18-m6`. Entries cover M0 to M6.
+First public release. Zenodo DOI 10.5281/zenodo.24378463 (concept DOI 10.5281/zenodo.24378462). Tag `m6-2026-11-18`; release data in `results/2026-11-18-m6`. Entries cover M0 to M6.
 
 
 - M0 foundations: fault engine, catalog v1, profiles, schemas, `tt-decide`, banned-word and canary lint, event log validation, CI, verification register.
