@@ -21,7 +21,11 @@ def test_macro_names_are_letters_only():
 @pytest.mark.skipif(not RELEASE.exists(), reason="committed release not present")
 def test_committed_release_matches_the_snapshot():
     files = render(RELEASE)
-    assert sorted(files) == ["detail-track-n-fixed.tex", "detail-track-s.tex", "numbers.tex", "table-track-n-fixed.tex", "table-track-s.tex"]
+    assert sorted(files) == [
+        "configs.tex", "detail-track-n-fixed.tex", "detail-track-s.tex",
+        "exposure-track-n-fixed.tex", "exposure-track-s.tex", "honesty-track-n-fixed.tex", "honesty-track-s.tex",
+        "numbers.tex", "outcomes-track-n-fixed.tex", "outcomes-track-s.tex", "table-track-n-fixed.tex", "table-track-s.tex",
+    ]
     _check_snapshots(files, SNAPSHOTS)
 
 
@@ -60,3 +64,13 @@ def test_m6_numbers_match_the_release():
     assert r"\newcommand{\cmcaTrackNFixedCcClaudeSent}{107}" in numbers
     assert r"\newcommand{\cmcaTrackSCurveTasks}{20}" in numbers
     assert r"\newcommand{\cmcaTrackSFxClaudeCurveHeavy}{0.550}" in numbers
+
+
+@pytest.mark.skipif(not M6.exists(), reason="committed release not present")
+def test_m6_audit_tables_come_from_the_release():
+    files = render(M6)
+    # results/2026-11-18-m6/hf/meta.json and track-s/fx-claude/summary.json (moderate report: 27 failed, overclaim 0.8148).
+    assert r"\newcommand{\cmcaTrialDirs}{3,011}" in files["numbers.tex"]
+    assert r"\newcommand{\cmcaUnits}{2,990}" in files["numbers.tex"]
+    assert "fx & 27 & 22/27:" in files["honesty-track-s.tex"]
+    assert r"\code{claude-sonnet-5-5} (medium)" in files["configs.tex"]

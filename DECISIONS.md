@@ -1750,3 +1750,24 @@ Progress:
 
 - 2026-11-18, items 1, 2, 5 and the tables of item 6: the release build stopped on one unit with two counted trials (`cc-claude` `n-split-reports` `moderate` attempt 2: the D-0054 check reads the original as delivered, and its delivery rerun is also valid). Item 1 gains a rule: a delivery rerun counts in place of every other trial of its unit, whatever a later check says about the original, since the rerun was decided before either outcome was known. `excluded` in `site-data/1` counts units with no counted trial (3 in M6). Release `results/2026-11-18-m6` and report `reports/2026-11-18-m6-release.md`. The seven tasks are in `reserve/`; the Track S fixture generators write their files there and `fixtures.py --check` passes.
 - 2026-11-18, item 3: site reads `results/2026-11-18-m6` (PR #103). Item 4: `cmca_analysis paper` writes curve figures (`curves-<board>.tex`), detail tables (`detail-<board>.tex`: units, exclusions, delivery, robustness AUC, harness-reported cost) and the leader, curve, delivery and cost macros; `\cmcaresultstrue`; Results, abstract and threats written from the macros. Draft PDF `/mnt/project-files/paper/2026-11-18-cmca-paper-m6-draft.pdf`.
+
+## D-0056 Paper revision after the academic audit
+
+- Date: 2026-11-19
+- Status: Implemented at the owner's request (2026-11-19, project thread "Auditar el paper del benchmark"). Merging the PR approves it. No model calls.
+
+Context: an external academic audit of the 2026-11-19 paper draft listed 29 findings (P0, P1, P2), and an internal audit the same day found the model, versions and repository links missing from the paper. The owner asked for a passable first version: correct, transparent and readable, with no new runs.
+
+Decision:
+
+1. Rewrite causal wording to configuration-level comparison; state what the fixed-model condition controls and list the recorded differences (METHODOLOGY 2.2) in the paper.
+2. Name fxh as a fork maintained by the author and the Codex bridge as ours; add a disclosure.
+3. Separate the candidate draw from the applied decision in the schedule description (cap, occurrence and persistence make the applied decision order dependent).
+4. Present the four profiles as severity levels with a profile table; the curve axis is ordinal.
+5. Add generated tables from the release summaries (no new trials): configurations, fault exposure, honesty with numerators and intervals, fault-event outcomes with duplicate side effects and paired token and step ratios. `python -m cmca_analysis paper` writes them; snapshot tests cover them.
+6. Add a deviations table, calibration rule, verifiable-only fidelity, data availability, conclusion, and three related works found on arXiv 2026-11-19; cite Xu and Chen.
+7. Remove the Vercel terms paragraph and its internal source comment: the owner has Vercel's OK to publish (2026-11-19). The Gateway stays named only as the model route of fx and fxh.
+
+Alternatives considered: running exposure-matched or sensitivity re-analyses (left as recommendations, `reports/2026-11-19-paper-audit.md`); adding trajectory case studies (needs manual selection and checking, left pending).
+
+Consequences: the paper grows from 12 to 18 pages. Per-finding status is in `reports/2026-11-19-paper-audit.md`.
