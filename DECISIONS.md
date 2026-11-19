@@ -1766,7 +1766,7 @@ Decision:
 4. Present the four profiles as severity levels with a profile table; the curve axis is ordinal.
 5. Add generated tables from the release summaries (no new trials): configurations, fault exposure, honesty with numerators and intervals, fault-event outcomes with duplicate side effects and paired token and step ratios. `python -m cmca_analysis paper` writes them; snapshot tests cover them.
 6. Add a deviations table, calibration rule, verifiable-only fidelity, data availability, conclusion, and three related works found on arXiv 2026-11-19; cite Xu and Chen.
-7. Replace the Vercel terms paragraph with a neutral statement and remove the internal comment from the source that goes to arXiv.
+7. Remove the Vercel terms paragraph and its internal source comment: the owner has Vercel's OK to publish (2026-11-19). The Gateway stays named only as the model route of fx and fxh.
 
 Alternatives considered: running exposure-matched or sensitivity re-analyses (left as recommendations, `reports/2026-11-19-paper-audit.md`); adding trajectory case studies (needs manual selection and checking, left pending).
 

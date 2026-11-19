@@ -30,7 +30,7 @@ Status values: fixed, partly fixed, pending (needs work beyond a first version),
 | P1-07 Poison is a token proxy | Real. | fixed | Called a token-based proxy and a lower bound; Table 7 gives k/n and intervals. No manual review. |
 | P1-08 Native axis not run | Real. | fixed | 4.2 says it was not run. |
 | P1-09 Reproducibility | Real. The paper had no URL, model or versions. | fixed | Table 2 (configs from the release), "Code and data availability" with repository, release, tags `m6-2026-11-18` and `pre-m6-2026-11-10` (both verified on origin), seed, HF dataset; appendix gives the command. |
-| P1-10 Vercel terms | Owner decision. | fixed in text | Replaced by a neutral statement; the internal source comment that arXiv would publish is gone. Whether to ask Vercel for written permission stays with the owner. |
+| P1-10 Vercel terms | Resolved by the owner: Vercel gave the OK to publish (2026-11-19). | fixed | Provider-terms paragraph and its internal source comment removed; the Gateway is named only as the model route of fx and fxh. |
 | P1-11 Novelty and bibliography | Partly real. "To the best of our knowledge" added. The audit's claim that ref [18] has the wrong title does not hold: arXiv 2605.27922v2 is titled "Harness-Bench: Evaluating Agent Harnesses across Models and Realistic Workflows" (V-19; the audit quotes v1). arXiv 2610.32483 exists and is now cited, with 2608.26218 and 2609.32459 found in the same search. ResiliBench was not found on arXiv and is not cited. The ", ." punctuation is fixed. All 19 arXiv entries were checked against export.arxiv.org. | fixed | `refs.bib`, 2. |
 | P1-12 Uncertainty in figures | Partly real. | partly fixed | Intervals added for overclaim and poison; curve figure stays point estimates with the caption saying so. |
 
@@ -65,7 +65,7 @@ Status values: fixed, partly fixed, pending (needs work beyond a first version),
 3. Two trajectory case studies, one recovery and one failure after a fault (existing data, manual selection).
 4. Human validation of the fault-event outcome rules on a sample (existing data, human time).
 5. Per-category task table and infrastructure failure counts in the paper (existing data).
-6. Owner: affiliation, license choice at submission, and whether to request written permission from Vercel.
+6. Owner: affiliation and license choice at submission.
 
 ## Recommended experiments (not results)
 
