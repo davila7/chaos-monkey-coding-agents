@@ -1771,3 +1771,20 @@ Decision:
 Alternatives considered: running exposure-matched or sensitivity re-analyses (left as recommendations, `reports/2026-11-19-paper-audit.md`); adding trajectory case studies (needs manual selection and checking, left pending).
 
 Consequences: the paper grows from 12 to 18 pages. Per-finding status is in `reports/2026-11-19-paper-audit.md`.
+
+## D-0057 Open-source readiness of the repository
+
+Date: 2026-11-19
+
+Context: the repository is public, and the results site moved to its own domain, https://www.chaos-monkey.tech. The owner asked for the repository to meet what reviewers of open-source benchmarks look for, and for the README to show the latest results. No runs and no test changes.
+
+Decision:
+
+1. The site URL becomes https://www.chaos-monkey.tech in README, `CITATION.cff`, `CLAUDE.md`, the site's `metadataBase` (absolute og:image URLs), two blog posts and `paper/hf-dataset-card.md`. Committed reports and evidence keep the old URL as written.
+2. README: M6 results from `results/2026-11-18-m6` (the numbers in `reports/2026-11-18-m6-release.md` section 2), badges, a quickstart with `oracle` and `nop` through `cmca_harbor.validate` (no API key), the release reproduction pointer and a citation block.
+3. New files: `SECURITY.md` (SPEC 15.1 and 15.3), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1, verbatim except the contact), `.github/CODEOWNERS`, a harness request issue form, issue template links, and a pull request template. `CODE_OF_CONDUCT.md` is outside the SPEC 15.1 set; this entry adds it.
+4. `CONTRIBUTING.md` gains "Adding a harness" (SPEC 15.1 asks for it) and "Tasks". `CHANGELOG.md` gets a heading for the `m6-2026-11-18` release.
+
+Alternatives considered: writing `TASK_AUTHORING.md`, `SUBMITTING.md` and a generated `CAPABILITIES.md` now. They stay with M7, where SPEC 15.1 places the exact quickstart and submission flow.
+
+Consequences: repository settings outside git (website field, topics, GitHub Release for the tag, private vulnerability reporting, branch protection) are listed for the owner, who changes them.
