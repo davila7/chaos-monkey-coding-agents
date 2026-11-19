@@ -1774,7 +1774,8 @@ Consequences: the paper grows from 12 to 18 pages. Per-finding status is in `rep
 
 ## D-0057 Open-source readiness of the repository
 
-Date: 2026-11-19
+- Date: 2026-11-19
+- Status: Implemented at the owner's request (2026-11-19, project thread "Preparar el repo como benchmark open source"). Merging the PR approves it. No model calls.
 
 Context: the repository is public, and the results site moved to its own domain, https://www.chaos-monkey.tech. The owner asked for the repository to meet what reviewers of open-source benchmarks look for, and for the README to show the latest results. No runs and no test changes.
 
