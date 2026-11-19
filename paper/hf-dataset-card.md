@@ -23,7 +23,7 @@ Tasks, fault catalog, profiles and aggregated results of CMCA, a benchmark that 
 
 - Paper: arXiv link added at publication
 - Code and full evidence: https://github.com/davila7/chaos-monkey-coding-agents
-- Results site: https://chaos-monkey-coding-agents.vercel.app
+- Results site: https://www.chaos-monkey.tech
 
 ## Contents
 

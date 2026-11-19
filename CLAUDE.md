@@ -24,4 +24,4 @@ A milestone is done when every acceptance criterion in SPEC section 19 is met, t
 
 ## Project links
 
-- Results site (production): https://chaos-monkey-coding-agents.vercel.app. Source in `packages/site`; Vercel deploys `main` with Root Directory `packages/site`.
+- Results site (production): https://www.chaos-monkey.tech. Source in `packages/site`; Vercel deploys `main` with Root Directory `packages/site`.
