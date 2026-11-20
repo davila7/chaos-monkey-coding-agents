@@ -132,7 +132,7 @@ To cite the software release:
 
 ## Affiliations
 
-To be completed by the maintainers before the first public release (SPEC 13.2).
+Daniel Ávila Arias, Independent Researcher.
 
 ## License
 
