@@ -1789,3 +1789,19 @@ Decision:
 Alternatives considered: writing `TASK_AUTHORING.md`, `SUBMITTING.md` and a generated `CAPABILITIES.md` now. They stay with M7, where SPEC 15.1 places the exact quickstart and submission flow.
 
 Consequences: repository settings outside git (website field, topics, GitHub Release for the tag, private vulnerability reporting, branch protection) are listed for the owner, who changes them.
+
+## D-0058 Paper published as a preprint on Zenodo
+
+- Date: 2026-11-20
+- Status: Implemented at the owner's request (2026-11-20, project thread "Publicar el paper en Zenodo"). Merging the PR approves it. No model calls.
+
+Context: arXiv needs an endorsement the owner does not have yet (D-0050). The owner asked for the paper to be published on Zenodo for a citable DOI. The release software was already archived on Zenodo through the GitHub integration (concept DOI 10.5281/zenodo.24378462, release DOI 10.5281/zenodo.24378463).
+
+Decision:
+
+1. The paper PDF (built from main at `bd3877eea`, md5 `33a33f9b423d71319cc3662df91057d9`) is a separate Zenodo record, type Publication / Preprint, license CC BY 4.0, author affiliation "Independent Researcher". It links to the software DOI ("Documents") and to the repository, the Hugging Face dataset and the results site ("Is supplemented by"). Published 2026-11-20: record https://zenodo.org/records/24403112, version DOI 10.5281/zenodo.24403112, concept DOI 10.5281/zenodo.24403111.
+2. `CITATION.cff` gains `preferred-citation` for the paper (concept DOI) and the paper DOI in `identifiers`; README shows a paper badge, the paper link and a BibTeX entry for the paper above the software one; `paper/hf-dataset-card.md` links the paper DOI.
+
+Alternatives considered: the GitHub integration for the paper (it archives the repository as software, not the paper); waiting for arXiv (blocked on endorsement). An arXiv version can be added later and linked from the Zenodo record as a new related identifier.
+
+Consequences: GitHub's "Cite this repository" now offers the paper. A corrected PDF needs a new Zenodo version (new version DOI, same concept DOI). The paper's own availability section does not name its DOI; the next version can add it.

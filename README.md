@@ -8,6 +8,7 @@
 [![paper](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml/badge.svg)](https://github.com/davila7/chaos-monkey-coding-agents/actions/workflows/paper.yml)
 [![Code license: Apache-2.0](https://img.shields.io/badge/code-Apache--2.0-blue)](LICENSE)
 [![Data license: CC BY 4.0](https://img.shields.io/badge/data-CC%20BY%204.0-lightgrey)](LICENSE-DATA)
+[![Paper DOI](https://img.shields.io/badge/paper-10.5281%2Fzenodo.24403111-blue)](https://doi.org/10.5281/zenodo.24403111)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24378462.svg)](https://doi.org/10.5281/zenodo.24378462)
 [![Dataset on Hugging Face](https://img.shields.io/badge/dataset-Hugging%20Face-yellow)](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents)
 
@@ -15,7 +16,7 @@ How coding-agent harnesses recover when their tools fail. A fault-injection benc
 
 CMCA injects seeded faults into tool calls at two layers: an MCP proxy in front of mock services (Track S) and each harness's own built-in tools (Track N). It measures task success under faults, recovery behavior, the cost of recovery, and whether the agent reports its outcome honestly. The full design is in [SPEC.md](SPEC.md) and the method in [METHODOLOGY.md](METHODOLOGY.md).
 
-Results site: [www.chaos-monkey.tech](https://www.chaos-monkey.tech) (source in `packages/site`). Data: [Hugging Face](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents).
+Paper: [doi.org/10.5281/zenodo.24403111](https://doi.org/10.5281/zenodo.24403111) (preprint on Zenodo). Results site: [www.chaos-monkey.tech](https://www.chaos-monkey.tech) (source in `packages/site`). Data: [Hugging Face](https://huggingface.co/datasets/davila7/chaos-monkey-coding-agents).
 
 ## Results
 
@@ -102,7 +103,21 @@ Layout:
 
 ## Citation
 
-Use [CITATION.cff](CITATION.cff) (GitHub shows "Cite this repository"):
+Cite the paper ([CITATION.cff](CITATION.cff) sets it as the preferred citation, which GitHub shows under "Cite this repository"):
+
+```bibtex
+@misc{avila_arias_cmca_paper_2026,
+  author    = {\'{A}vila Arias, Daniel},
+  title     = {Chaos Monkey for Coding Agents: Measuring How Coding-Agent Harnesses Recover When Their Tools Fail},
+  year      = {2026},
+  publisher = {Zenodo},
+  note      = {Preprint},
+  doi       = {10.5281/zenodo.24403111},
+  url       = {https://doi.org/10.5281/zenodo.24403111}
+}
+```
+
+To cite the software release:
 
 ```bibtex
 @software{avila_arias_cmca_2026,
