@@ -15,13 +15,13 @@ configs:
 ---
 
 <!-- Draft for the Hugging Face dataset repository (D-0050 item 5). The owner uploads it as README.md
-     and adds the arXiv abstract link below once the paper is announced; the Hub then links the paper. -->
+     The paper is a preprint on Zenodo (D-0058). -->
 
 # Chaos Monkey for Coding Agents
 
 Tasks, fault catalog, profiles and aggregated results of CMCA, a benchmark that measures how coding-agent harnesses recover when their tool calls fail.
 
-- Paper: arXiv link added at publication
+- Paper: https://doi.org/10.5281/zenodo.24403111
 - Code and full evidence: https://github.com/davila7/chaos-monkey-coding-agents
 - Results site: https://www.chaos-monkey.tech
 
