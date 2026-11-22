@@ -1805,3 +1805,20 @@ Decision:
 Alternatives considered: the GitHub integration for the paper (it archives the repository as software, not the paper); waiting for arXiv (blocked on endorsement). An arXiv version can be added later and linked from the Zenodo record as a new related identifier.
 
 Consequences: GitHub's "Cite this repository" now offers the paper. A corrected PDF needs a new Zenodo version (new version DOI, same concept DOI). The paper's own availability section does not name its DOI; the next version can add it.
+
+## D-0059 Paper page on the results site
+
+- Date: 2026-11-22
+- Status: Implemented at the owner's request (2026-11-22, project thread "Agregar el paper al sitio"). Merging the PR approves it. No model calls.
+
+Context: the paper is on Zenodo (D-0058) but the results site did not link it. The owner asked for it on the site and left the placement to Claude after a look at how other benchmarks do it. SWE-bench has a "Paper" item in its top navigation; LiveCodeBench puts Paper, Code and Data links under the title and a BibTeX block on its page; tbench.ai and the Aider leaderboard show no paper link.
+
+Decision:
+
+1. A `/paper/` page: first-page thumbnail, title, author and affiliation, buttons for PDF, DOI, code and data, the abstract as published, and the README BibTeX entry with a copy button. The citation uses the concept DOI 10.5281/zenodo.24403111, as `CITATION.cff` does.
+2. "Paper" is the first item of the site navigation, and "Read the paper" becomes the primary button of the home `#about` section, before the spec and the code.
+3. The PDF is served from the site (`packages/site/public/paper/cmca-paper.pdf`), byte-identical to the Zenodo file (md5 `33a33f9b423d71319cc3662df91057d9`, checked by a site test, which also checks the BibTeX against README and the DOI against `CITATION.cff`).
+
+Alternatives considered: linking the navigation item straight to Zenodo (no citation block, leaves the site); a section on the home page (the owner wants nothing between the banner and the ranking, and a section lower down is easy to miss).
+
+Consequences: a new Zenodo version of the paper needs the PDF, thumbnail, abstract and md5 in the site updated in the same PR.

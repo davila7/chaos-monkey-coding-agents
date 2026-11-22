@@ -40,7 +40,10 @@ export default function Home() {
             what recovery costs, and whether it reports the outcome honestly.
           </p>
           <div className="cta">
-            <a className="btn primary" href={SPEC}>
+            <a className="btn primary" href="/paper/">
+              Read the paper &rarr;
+            </a>
+            <a className="btn" href={SPEC}>
               Read the spec &gt;_
             </a>
             <a className="btn" href={REPO}>

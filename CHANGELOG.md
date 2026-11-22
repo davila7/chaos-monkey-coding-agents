@@ -5,6 +5,7 @@
 - Paper audit revision (D-0056): revised paper text and generated tables, status per finding in `reports/2026-11-19-paper-audit.md`.
 - Open-source readiness (D-0057): results site moves to https://www.chaos-monkey.tech; README with M6 results, a quickstart without an API key and the release reproduction command; `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CODEOWNERS`; harness and task sections in `CONTRIBUTING.md`; harness request issue form and pull request template.
 - Paper preprint on Zenodo (D-0058): DOI 10.5281/zenodo.24403111 (concept), set as the preferred citation in `CITATION.cff`; README and Hugging Face card link it.
+- Paper page on the results site (D-0059): `/paper/` with PDF, DOI, abstract and BibTeX; "Paper" in the navigation and "Read the paper" on the home page.
 
 ## m6-2026-11-18 (2026-11-18)
 
