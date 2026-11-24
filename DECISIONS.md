@@ -1822,3 +1822,29 @@ Decision:
 Alternatives considered: linking the navigation item straight to Zenodo (no citation block, leaves the site); a section on the home page (the owner wants nothing between the banner and the ranking, and a section lower down is easy to miss).
 
 Consequences: a new Zenodo version of the paper needs the PDF, thumbnail, abstract and md5 in the site updated in the same PR.
+
+## D-0060 Private holdout: build it, keep it in a gated dataset (plan)
+
+- Date: 2026-11-24
+- Status: Proposed. Merging the PR that carries this entry approves phase A. It approves no model calls.
+
+Context: SPEC 10.5 sets a private holdout of 20% of tasks for verified runs and contamination checks, and SPEC 12 reports the holdout-versus-public gap per config. D-0043 item 4 planned 8 tasks per track and left the location as an open question for the owner. It was never answered, so no holdout exists: M6 was run and published on public tasks only (37 Track S, 36 Track N), and the nine `reserve/` tasks are in this public repository and in the public Hugging Face snapshot, so none of them can be held out. The paper's contamination paragraph claims only the canary string and is correct. The M6 blog post says "The held-out tasks are not in it", which suggests a set that does not exist. On 2026-11-24 the owner read the Hugging Face guide "How to build and maintain an agentic evaluation" (huggingface.co/blog/agentic-evals) and asked to build the holdout with the review route it recommends: active test items in a gated dataset with manual approval of each access request, since whatever stays closed needs its own way to be audited.
+
+Decision:
+
+1. **Size and selection.** 8 new tasks per track, 16 in total, one or two per SPEC 10.2 category (Track S 2, 2, 2, 1, 1 over its five categories; Track N 2, 2, 1, 1, 1, 1 over its six). All are new: no `reserve/` task and no copy or variant of a public task, since anything published cannot be held out. Authoring follows SPEC 10.3 and D-0043 item 2 and 3 (generator, held-out verification data, `chaos.toml` with a poisonable resource, `WALKTHROUGH.md` with shortcut attempts that score 0, at least three traps, no evaluated harness used to write or try a task).
+2. **Where it lives.** Working copy in a private GitHub repository `davila7/cmca-holdout`, created by the owner and added to the session; task PRs there carry the SPEC 10.4 step 6 review. Review copy in a Hugging Face dataset `davila7/cmca-holdout`, created private and switched to gated with manual approval once phase A merges; the owner uploads it, as with the public dataset. Its card states the intended use (audit of tasks and verifiers, contamination checks, verified runs), the conditions (no redistribution, no training, keep the canary), how to request access, and a change log. The holdout never enters this repository, the public dataset, the site or `results/`.
+3. **Public trace without content.** This repository gets `datasets/holdout.json`: suite version, task count per track and category, and the SHA-256 of a canonical archive of the holdout tree (`git archive` of a tagged commit in the private repository). Anyone granted access can check that the copy they read is the one scored. Validation evidence (oracle and `nop` logs) stays in the private repository. `CHANGELOG.md` records each holdout version and rotation by version and hash only.
+4. **Phase A, no spend.** Write the 16 tasks; run SPEC 10.4 steps 1 to 5 with `python -m cmca_harbor.validate --dataset <private checkout>` and `cmca lint` (canary and banned-word rules) in a cloud session; owner review in the private repository; upload to the gated dataset; commit `datasets/holdout.json`. Track S tasks reuse the public mock services and the shared fixture helpers by import; their own fixture generators live in the private repository.
+5. **Phase B, calibration, needs a cost approval.** SPEC 10.4 step 7 needs model calls: `cc-claude` `clean`, 5 attempts per task, 80 trials. At the stage 3 calibration mean of $0.199 per trial (`reports/2026-11-16-m6-stage3-calibration.md`) that is about $16 Anthropic. Tasks below the floor are revised or replaced inside the holdout. This phase starts only after the owner approves that estimate in the project thread.
+6. **Phase C, holdout-versus-public gap, separate plan.** Running the M6 configs on the holdout to report the SPEC 12 gap gets its own plan and cost estimate after phase B. Until then the board reports no gap.
+7. **Correction now.** The M6 blog post sentence changes to say that M6 has no held-out set yet and that one is being built under this entry.
+
+Alternatives considered:
+
+- Gated Hugging Face dataset only: one location, but no pull request review for SPEC 10.4 step 6 and no CI on the task files.
+- Private GitHub repository only (D-0043 default): review and CI, but no way for an outside reviewer to audit the tasks, which is the gap the guide points at.
+- Encrypted files in this repository (rejected in D-0043): ciphertext in a public tree and a harder CI.
+- Hold back some of the 73 published tasks: they are already public on GitHub, Hugging Face and Zenodo, so they cannot serve as a holdout.
+
+Consequences: the benchmark gets a held-out set with an audit route, and the public repository records its existence and hash without its content. M6 results do not change. Verified submissions (SPEC 14) and the contamination gap become possible after phases B and C.
