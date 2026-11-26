@@ -1883,3 +1883,37 @@ Alternatives considered:
 Consequences: the benchmark gets its first recorded review of why trials fail and a checked basis for the Overclaim claim. No model calls and no spend. Any fix to tasks or scores follows in its own entry.
 
 Progress (2026-11-26): audit done, `reports/2026-11-26-failure-audit.md`. Of 80 trials, 42 `agent_error`, 33 `unfair_fault`, 0 `grader_rejects_valid`, 5 `unclear`; the unfair labels fall on nine tasks whose poison has a route to the true data but nothing that points to it. The 26 trials whose verifier logs were missing from the repository (`cmca_harbor.trials.EVIDENCE` omits `verifier/verify.txt` and similar) were read from the M6 job archives; those logs are committed under `results/audit/2026-11-26-failure-audit/verifier/`. Proposed fixes go to a separate entry. Deviation from item 6: the blog post (`packages/site/content/blog/2026-11-26-we-read-our-failures.md`) is in the same pull request as the report instead of a later one, so the owner reviews both at once; merging that pull request still publishes it.
+
+## D-0062 Submit the paper to TMLR: anonymized build and supplement (plan)
+
+- Date: 2026-11-26
+- Status: Proposed. Merging the PR that carries this entry approves it. It approves no model calls.
+
+Context: on 2026-11-26 the owner chose Transactions on Machine Learning Research (TMLR) as the first peer-reviewed venue for the paper (D-0058 preprint on Zenodo). TMLR rules, read on 2026-11-26 at https://jmlr.org/tmlr/author-guide.html, https://jmlr.org/tmlr/submissions.html and https://jmlr.org/tmlr/editorial-policies.html:
+
+- The TMLR LaTeX style file and template are mandatory (https://github.com/JmlrOrg/tmlr-style-file); changes to formatting, font or layout "may result in rejection without review".
+- No page limit; unusually long papers (appendices excluded) delay review.
+- Double-blind: the submission and its supplement must be anonymized and must not link to a version that names the author. Preprints on any server are allowed, so the Zenodo preprint stays.
+- No fees. Supplementary material up to 100 MB, PDF or ZIP.
+- No parallel submission to another archival venue, and no later submission of an expanded conference version.
+- Every author needs an active OpenReview profile; profiles registered with a personal email are moderated (https://docs.openreview.net, independent researcher FAQ).
+- Acceptance asks whether the claims are supported by accurate, convincing and clear evidence.
+
+The current paper names the author in `main.tex` (`\author`, `pdfauthor`) and links the public repository and the Hugging Face dataset in `sections/availability.tex`. D-0061 found that 33 of 80 audited failed `moderate` trials were `unfair_fault`, which bears on the Overclaim claim; the fixes are a separate entry.
+
+Decision:
+
+1. **One source, two builds.** `paper/main-tmlr.tex` inputs the same `sections/`, `figures/` and `generated/` as `main.tex`, uses the TMLR style file with its anonymous submission option, and sets a `cmcaanon` flag. The style file is downloaded by `paper/build.sh` from a pinned commit of `JmlrOrg/tmlr-style-file` (SHA-256 checked) into a git-ignored folder, unless its license allows vendoring; the license is recorded in `docs/verification/V-xx.md`.
+2. **Anonymized text.** Under `cmcaanon`, the author block reads "Anonymous authors", `pdfauthor` is empty, and `sections/availability.tex` points to the supplementary archive instead of GitHub, Hugging Face, Zenodo or the site. No other section changes.
+3. **Anonymized supplement.** `scripts/tmlr-supplement.sh <tag>` builds `paper/tmlr-supplement.zip` from `git archive` of the release tag: `datasets/`, `packages/`, `python/`, `results/<release>/` without trajectories, and SPEC.md, with files that identify the author removed (CITATION.cff, LICENSE headers keep only the license text) and author strings replaced. The script fails if the archive exceeds 100 MB or if a case-insensitive search for the author name, the GitHub login, the site domain or the Zenodo and Hugging Face record ids finds any match in the archive or in `pdftotext` of the PDF.
+4. **CI.** The paper workflow builds both PDFs and runs the anonymity check; it uploads the TMLR PDF and the supplement as artifacts.
+5. **Order.** The TMLR version is submitted only after the D-0061 fixes are merged and the generated tables reflect them, so the submitted claims match the audited evidence. The Zenodo record gets a new version at the same time.
+6. **Owner steps.** The owner creates or completes the OpenReview profile (moderated for a personal email, so this starts first), suggests an action editor, and submits on OpenReview himself. Until a decision, the paper goes to no other archival venue.
+
+Alternatives considered:
+
+- Submit the current PDF now: faster, but the claims would not reflect the D-0061 audit, and TMLR's main criterion is evidence for the claims.
+- An anonymous mirror service (for example anonymous.4open.science) instead of a ZIP: keeps browsing, but depends on a third party and still needs the same scrubbing; the ZIP is checked by the script.
+- A separate copy of the sections for TMLR: two texts would drift; one source with a flag keeps a single text.
+
+Consequences: no model calls and no spend. The public paper and site are unchanged. The submission waits on the D-0061 fix entry.
